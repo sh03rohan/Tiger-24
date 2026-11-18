@@ -47,7 +47,13 @@ function onKey(e) {
   }
   if (G.state === 'planning' && e.code === 'Escape') backToLobby();
 }
-function enterLobby() { if (G.state !== 'splash') return; A.init(); A.startAmbience(); A.setVol(); $('splash').classList.add('out'); setTimeout(() => { $('splash').hidden = true; $('splash').classList.remove('out'); }, 700); G.state = 'lobby'; show('lobbyUI'); goLobby('main'); }
+// phones: go fullscreen and lock to landscape where the browser allows it (Android Chrome); iOS shows the rotate hint instead
+function tryLandscape() {
+  if (!G.mobile) return;
+  try { const el = document.documentElement, req = el.requestFullscreen || el.webkitRequestFullscreen; const lock = () => { try { screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape').catch(() => { }); } catch (e) { } };
+    if (req && !(document.fullscreenElement || document.webkitFullscreenElement)) { const r = req.call(el, { navigationUI: 'hide' }); if (r && r.then) r.then(lock).catch(() => { }); else lock(); } else lock(); } catch (e) { }
+}
+function enterLobby() { if (G.state !== 'splash') return; tryLandscape(); A.init(); A.startAmbience(); A.setVol(); $('splash').classList.add('out'); setTimeout(() => { $('splash').hidden = true; $('splash').classList.remove('out'); }, 700); G.state = 'lobby'; show('lobbyUI'); goLobby('main'); }
 
 /* ================= lobby UI ================= */
 const MENU = [
@@ -178,7 +184,7 @@ function drawBlueprint() {
   for (const [k, sp] of Object.entries(LV.spawns)) { const on = k === plan.entry; g.strokeStyle = on ? '#f29b2b' : 'rgba(242,155,43,.35)'; g.fillStyle = g.strokeStyle; g.lineWidth = on ? 3 : 1.5; g.beginPath(); g.arc(X(sp.pos.x), Z(sp.pos.z), on ? 11 : 8, 0, PI * 2); g.stroke(); g.font = '800 12px "Saira Condensed", sans-serif'; g.fillText(sp.label.toUpperCase(), X(sp.pos.x), Z(sp.pos.z) + 24); }
 }
 function deploy() {
-  A.init(); A.startAmbience(); A.setVol(); applyLoadout(PROFILE.loadout);
+  tryLandscape(); A.init(); A.startAmbience(); A.setVol(); applyLoadout(PROFILE.loadout);
   G.state = 'playing'; show('hud'); startMission(selMission, plan.entry, plan.diff, NET.on ? [] : PROFILE.squad); G.sway = LV.sway || 0; G.shakeAmb = LV.shake || 0;
   if (NET.on) { MS.netClient = NET.client; onMissionStart(); }
   if (!G.mobile) requestLock();
