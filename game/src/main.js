@@ -8,7 +8,7 @@ import { startMission, updateMission, installHooks, MS, cutWire, closeDefuse, fm
 import { initHUD, updateHUD, defuseUpdate, buildMapImage } from './hud.js';
 import { MISSIONS } from './missions/index.js';
 import { LOBBY, buildLobby, setLobbyCam, showLobby, updateLobby, missionArt, SQUAD_INFO, tagPositions } from './lobby.js';
-import { NET, COLORS, connect, available, hostGame, joinGame, leaveGame, openGames, players, hostPeer, setReady, updateSetup, setProfile, onMissionStart, onMissionLeave, netTick, puppetUpdate, installNetHooks } from './net.js';
+import { NET, COLORS, connect, available, relayUrl, hostGame, joinGame, leaveGame, openGames, players, hostPeer, setReady, updateSetup, setProfile, onMissionStart, onMissionLeave, netTick, puppetUpdate, installNetHooks } from './net.js';
 
 const ARTS = {}; let selMission = null, plan = { entry: null, diff: store.get('diff', 'veteran') }, focusOp = null, menuIdx = 0, loTab = 'primary';
 const SCREENS = ['splash', 'lobbyUI', 'planning', 'hud', 'pause', 'debrief', 'loading'];
@@ -235,8 +235,8 @@ function renderMulti() {
   if (!available()) {
     box.innerHTML = `<div class="panel mpwide"><h3>Multiplayer ei jaygay chole na</h3><p class="mpmuted">Co-op er jonno ekta connection lage. Dui upay:</p>
       <ol class="mpol"><li><b>claude.ai</b> te ei game ta open korun ar bondhuder sathe share korun. Shobai ek shathe page ta khulle ekjon host korbe, baki ra code diye join korbe.</li>
-      <li>Nijer server: repo theke <code>node server/relay.mjs</code> chalan, tarpor niche relay address din (jemon <code>ws://192.168.0.5:8787</code>).</li></ol>
-      <div class="mprow"><input id="mpRelay" placeholder="ws://host:8787" value="${esc(store.get('relay', ''))}" maxlength="120"><button type="button" class="btn" id="mpRelaySave">Save</button></div></div>`;
+      <li>Relay server: Render/Railway e <code>server/</code> deploy korun (README dekhun), tarpor niche tar address din (jemon <code>https://tiger24-relay.onrender.com</code>).</li></ol>
+      <div class="mprow"><input id="mpRelay" placeholder="https://tiger24-relay.onrender.com" value="${esc(store.get('relay', ''))}" maxlength="160"><button type="button" class="btn" id="mpRelaySave">Save</button></div></div>`;
     $('mpRelaySave').addEventListener('click', () => { store.set('relay', $('mpRelay').value.trim()); A.ui(); renderMulti(); }); return;
   }
   if (!NET.on) {
@@ -248,7 +248,8 @@ function renderMulti() {
       <button type="button" class="btn pri" id="mpHost">Host game</button>${err}</div>
       <div class="panel"><h3>Join koro</h3><div class="mprow"><input id="mpCode" maxlength="4" placeholder="CODE" autocomplete="off"><button type="button" class="btn" id="mpJoin">Join</button></div>
       <h3>Khola game ${games.length ? '' : '<span class="mpmuted">· ekhon keu host korche na</span>'}</h3><div class="mpgames">${games.map(g => `<button type="button" class="mpg" data-code="${esc(g.code)}"><b>${esc((g.h || 'Tiger').toUpperCase())}</b><span>${esc(g.m || '')} · ${g.n || 1} jon · ${g.st === 'play' ? 'mission cholche' : 'lobby'}</span><em>${esc(String(g.code).toUpperCase())}</em></button>`).join('')}</div>
-      <p class="mpmuted">${NET.transport === 'claude' ? 'Ei artifact je page e khola ache, sekhane thaka shobai ek room e.' : NET.transport === 'relay' ? 'Relay server e connected.' : 'Host/join chaple connect hobe.'}</p></div>`;
+      <p class="mpmuted">${NET.transport === 'claude' ? 'Ei artifact je page e khola ache, sekhane thaka shobai ek room e.' : NET.transport === 'relay' ? 'Relay server e connected: ' + esc(relayUrl()) : esc(NET.status || 'Host/join chaple connect hobe.')}</p>
+      ${NET.transport === 'claude' ? '' : `<details class="mpmuted"><summary>Relay server</summary><div class="mprow" style="margin-top:8px"><input id="mpRelay" placeholder="https://tiger24-relay.onrender.com" value="${esc(store.get('relay', '') || relayUrl())}" maxlength="160"><button type="button" class="btn" id="mpRelaySave">Save</button></div></details>`}</div>`;
     const saveName = () => setProfile($('mpName').value, NET.color);
     $('mpName').addEventListener('change', saveName);
     box.querySelectorAll('.mpc').forEach(b => b.addEventListener('click', () => { setProfile($('mpName').value, +b.dataset.c); A.ui(); renderMulti(); }));
@@ -259,7 +260,8 @@ function renderMulti() {
     const join = async code => { saveName(); NET.error = ''; A.ui(); $('mpBody').querySelector('#mpJoin') && ($('mpJoin').textContent = '…'); await joinGame(code); renderMulti(); };
     $('mpJoin').addEventListener('click', () => join($('mpCode').value)); $('mpCode').addEventListener('keydown', e => { if (e.key === 'Enter') join($('mpCode').value); });
     box.querySelectorAll('.mpg').forEach(b => b.addEventListener('click', () => join(b.dataset.code)));
-    if (!NET.transport) connect().then(() => { if (LOBBY.screen === 'multi') renderMulti(); });
+    const rs = $('mpRelaySave'); if (rs) rs.addEventListener('click', () => { store.set('relay', $('mpRelay').value.trim()); location.reload(); });
+    if (!NET.transport && !NET.autoTried) { NET.autoTried = true; connect().then(() => { if (LOBBY.screen === 'multi') renderMulti(); }); }
     return;
   }
   const ps = players(); const g = NET.host ? NET.game : ((hostPeer() || {}).presence || {}).g || {};

@@ -1,0 +1,11 @@
+# Render Blueprint for the Tiger 24 co-op relay (Dashboard → New → Blueprint → pick this repo).
+services:
+  - type: web
+    name: tiger24-relay
+    runtime: node
+    plan: free
+    rootDir: server
+    buildCommand: npm install
+    startCommand: node relay.mjs
+    healthCheckPath: /health
+    autoDeploy: true

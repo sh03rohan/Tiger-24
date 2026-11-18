@@ -28,23 +28,36 @@ const q20 = v => Math.round(v * 20), q100 = v => Math.round(v * 100);
 
 /* ===================== transport ===================== */
 let api = null, lobbyUnsub = null;
-export async function connect() {
+let connecting = null;
+export function connect() { if (api) return Promise.resolve(api); if (!connecting) connecting = doConnect().finally(() => { connecting = null; }); return connecting; }
+async function doConnect() {
   if (api) return api;
-  const relay = new URLSearchParams(location.search).get('relay') || store.get('relay', '');
+  const relay = relayUrl();
   if (window.claude && typeof window.claude.use === 'function') {
     NET.status = 'claude.ai room e connect hocche…'; try { const r = await window.claude.use('room'); if (r) { api = r; NET.transport = 'claude'; } } catch (e) { }
   }
-  if (!api && relay) { try { api = await wsRoom(relay); NET.transport = 'relay'; } catch (e) { NET.error = 'Relay server e connect hoy ni: ' + relay; } }
+  if (!api && relay) { NET.status = 'Relay server e connect hocche… (free server ghumiye thakle 30-60 second lagte pare)'; G.hooks.mpRefresh && G.hooks.mpRefresh();
+    try { await fetch(relay.replace(/^ws/, 'http') + '/health', { mode: 'no-cors', cache: 'no-store', signal: AbortSignal.timeout ? AbortSignal.timeout(70000) : undefined }); } catch (e) { } // wakes a sleeping free-tier server
+    try { api = await wsRoom(relay); NET.transport = 'relay'; } catch (e) { NET.error = 'Relay server e connect hoy ni: ' + relay + (location.protocol === 'https:' && relay.startsWith('ws://') && !/localhost|127\.0\.0\.1/.test(relay) ? ' (https page theke wss:// address lagbe)' : ''); } }
   if (!api) { NET.status = ''; return null; }
   NET.status = 'Online';
   lobbyUnsub = api.onPeers(() => G.hooks.mpRefresh && G.hooks.mpRefresh(), () => { });
   return api;
 }
-export const available = () => !!(window.claude && typeof window.claude.use === 'function') || !!(new URLSearchParams(location.search).get('relay') || store.get('relay', ''));
+// Relay address: ?relay= in the link, else the one saved on the Multiplayer screen, else <meta name="t24-relay"> in index.html.
+// http(s):// is turned into ws(s):// so the Render/Railway URL can be pasted as-is.
+export function relayUrl() {
+  const meta = document.querySelector('meta[name="t24-relay"]');
+  let u = (new URLSearchParams(location.search).get('relay') || store.get('relay', '') || (meta && meta.content) || '').trim();
+  if (!u) return ''; if (/^https:\/\//i.test(u)) u = 'wss://' + u.slice(8); else if (/^http:\/\//i.test(u)) u = 'ws://' + u.slice(7); else if (!/^wss?:\/\//i.test(u)) u = (location.protocol === 'https:' ? 'wss://' : 'ws://') + u;
+  return u.replace(/\/+$/, '');
+}
+export const available = () => !!(window.claude && typeof window.claude.use === 'function') || !!relayUrl();
 // Minimal stand-in for the room API over a WebSocket relay (see server/relay.mjs). Same calls: presence, peers, onPeers, join, leave.
 function wsRoom(url) {
   return new Promise((resolve, reject) => {
     let ws; try { ws = new WebSocket(url); } catch (e) { reject(e); return; }
+    const tmo = setTimeout(() => { try { ws.close(); } catch (e) { } reject(new Error('timeout')); }, 75000);
     let me = null; const rooms = new Map();
     const send = m => { if (ws.readyState === 1) ws.send(JSON.stringify(m)); };
     const mk = name => {
@@ -60,7 +73,7 @@ function wsRoom(url) {
     const lobby = mk('');
     setInterval(() => { for (const r of rooms.values()) if (r.dirty) { r.dirty = false; send({ t: 'pres', room: r.name, presence: r.mine }); } }, 40);
     ws.onmessage = ev => { let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
-      if (m.t === 'hello') { me = m.peer; send({ t: 'join', room: '' }); resolve(Object.assign(lobby, { join(name) { const r = rooms.get(name) || mk(name); send({ t: 'join', room: name }); r.map.set(me, {}); r.notify(); return Promise.resolve(r); } })); return; }
+      if (m.t === 'hello') { clearTimeout(tmo); me = m.peer; send({ t: 'join', room: '' }); resolve(Object.assign(lobby, { join(name) { const r = rooms.get(name) || mk(name); send({ t: 'join', room: name }); r.map.set(me, {}); r.notify(); return Promise.resolve(r); } })); return; }
       const r = rooms.get(m.room ?? ''); if (!r) return;
       if (m.t === 'state') { for (const p of m.peers) r.map.set(p.peer, p.presence || {}); r.map.set(me, { ...r.mine }); r.notify(); }
       else if (m.t === 'pres') { if (m.peer === me) return; r.map.set(m.peer, m.presence || {}); r.notify(); }

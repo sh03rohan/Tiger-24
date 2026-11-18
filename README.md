@@ -73,13 +73,33 @@ How it works:
 Transport:
 
 - **On claude.ai:** the game uses the artifact's `room` capability, so there's no server to run. Everyone who opens the shared artifact page is in the same room.
-- **Self-hosted:** run the relay in `server/` and point every player at it:
+- **Self-hosted (Vercel, GitHub Pages, your own server):** these sites only serve files and can't keep WebSocket connections open, so co-op needs the small relay in `server/` running somewhere else. Steps below.
+
+### Deploying the relay on Render (free)
+
+1. Sign in at [render.com](https://render.com) with GitHub.
+2. Go to **New → Blueprint** and pick this repository. Render reads `render.yaml` and creates a web service called `tiger24-relay` from the `server/` folder.
+3. Press **Apply** and wait for the deploy to finish. You'll get a URL like `https://tiger24-relay.onrender.com`.
+4. Open that URL in a browser. It should say `Tiger 24 relay OK`.
+5. Tell the game where the relay is. Use one of these:
+   - **For everyone (recommended):** put the URL in `game/index.html`, as `<meta name="t24-relay" content="https://tiger24-relay.onrender.com">`, then commit and push. Vercel redeploys and every player connects automatically.
+   - **Per player:** go to Multiplayer → **Relay server**, paste the URL, and press Save.
+   - **Per link:** add `?relay=https://tiger24-relay.onrender.com` to the game URL.
+
+`https://` is turned into `wss://` automatically. A page served over https needs a `wss://` relay, which Render provides.
+
+On Render's free plan the service sleeps after about 15 minutes with no players. The first player to open Multiplayer wakes it up; the game waits, which takes 30–60 seconds.
+
+**Other hosts:**
+
+- **Railway or Fly.io:** deploy the `server/` folder as a Node service. It listens on `$PORT` and answers `GET /health`.
+- **On a LAN:** run it on one machine:
 
 ```bash
 cd server && npm install && node relay.mjs
 ```
 
-Then open `game/?relay=ws://<relay-host>:8787` on each player's browser, or enter the relay address on the Multiplayer screen.
+Then use `ws://<that-machine-ip>:8787`.
 
 ## Code layout
 
