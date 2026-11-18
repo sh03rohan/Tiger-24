@@ -7,7 +7,7 @@ export const meta = { id: 'skyline', no: '04', name: 'Operation Skyline', art: '
   obj: ['Floor e lukano 3 ta bomb defuse', '6 jon office staff ke stairwell diye ber kora', 'Gunman der shamlano'], intel: 'Lift bondho. Reception desk e bomb er wire order er note ache. Bomb timer shuru hoye geche.' };
 
 export function build() {
-  K.beginLevel({ grade: { sat: 1.0, contrast: 1.08, sh: [0.92, 0.98, 1.1], hi: [1.04, 1.0, 0.96] }, bg: '#03050b', fog: '#050812', fogD: 0.006, sun: 0.6, sunColor: '#8aa0d8', sunPos: [30, 40, 20], sunTarget: [0, 0, 0], shadowSize: 24, hemi: 0.5,
+  K.beginLevel({ fill: 0.3, exposure: 1.05, grade: { sat: 1.0, contrast: 1.08, sh: [0.92, 0.98, 1.1], hi: [1.04, 1.0, 0.96] }, bg: '#03050b', fog: '#050812', fogD: 0.006, sun: 0.6, sunColor: '#8aa0d8', sunPos: [30, 40, 20], sunTarget: [0, 0, 0], shadowSize: 24, hemi: 0.5,
     alarmPos: [0, 3, 0], alarmBulbs: [[0, 3.1, 3.2], [-15, 3.1, -15], [15, 3.1, 15]], skyTop: '#02040a', skyBottom: '#1a2236', city: true, skyDist: 55, alarmLight: true });
   const LG = K.LG, m = K.makeMaterials();
   // ground far below

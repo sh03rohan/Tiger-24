@@ -1,5 +1,5 @@
 // Tiger 24 · Operation Vault — AI agents: enemies, hostages, teammates, ragdolls
-import { THREE, CANNON, G, PI, TAU, clamp, damp, angDiff, R, rr, A, FX, VO, NOISE, emitNoise, V3 } from './core.js';
+import { THREE, CANNON, G, PI, TAU, clamp, damp, angDiff, R, rr, A, FX, VO, NOISE, emitNoise, V3, rimify } from './core.js';
 import { makeEnemy, makeLeader, makeOperator, makeHostage, HOSTAGE_LOOKS, animate } from './assets.js';
 import { findPath, los, collideCircle, rayWorld, doorNear, doors, LV, roomAt, walkable, shatterGlass } from './levelkit.js';
 import { P, damagePlayer } from './player.js';
@@ -15,7 +15,7 @@ const tmp = V3(), tmp2 = V3();
 
 export class Agent {
   constructor(kind, model, o) {
-    this.kind = kind; this.m = model; this.root = model.root; G.scene.add(this.root);
+    this.kind = kind; this.m = model; this.root = model.root; rimify(this.root, kind !== 'enemy'); G.scene.add(this.root);
     this.pos = o.pos.clone(); this.yaw = o.yaw || 0; this.root.position.copy(this.pos); this.root.rotation.y = this.yaw;
     this.anim = { speed: 0, crouch: 0, aim: 0, pitch: 0, mode: 'normal', seed: R() * 10, breathe: true };
     this.alive = true; this.state = 'idle'; this.path = null; this.pathI = 0; this.repathT = 0; this.dest = null; this.vel = V3();

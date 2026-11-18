@@ -7,7 +7,7 @@ export const meta = { id: 'vault', no: '01', name: 'Operation Vault', art: 'bank
   obj: ['12 jon hostage ke jibito ber kora', 'Vault er bhitore bomb defuse kora', 'Gunman der leader ke grephtar kora'], intel: 'Bank er bhitore 9 jon armed gunman. Pichoner loading dock er door khola, kintu corridor e CCTV cholche.' };
 
 export function build() {
-  K.beginLevel({ grade: { sat: 1.0, contrast: 1.08, sh: [0.93, 0.98, 1.08], hi: [1.05, 1.0, 0.94] }, bg: '#05070a', sun: 0.85, fog: '#06080b', fogD: 0.014, sunPos: [5, 12, 26], sunTarget: [0, 0, -2], shadowSize: 16, rain: [[-22, 9.5, 22, 30], [-22, -36, 22, -24.5]], lightning: true, police: [0, 2.2, 15],
+  K.beginLevel({ fill: 0.25, exposure: 1.05, grade: { sat: 1.0, contrast: 1.08, sh: [0.93, 0.98, 1.08], hi: [1.05, 1.0, 0.94] }, bg: '#05070a', sun: 0.85, fog: '#06080b', fogD: 0.014, sunPos: [5, 12, 26], sunTarget: [0, 0, -2], shadowSize: 16, rain: [[-22, 9.5, 22, 30], [-22, -36, 22, -24.5]], lightning: true, police: [0, 2.2, 15],
     alarmPos: [0, 5.7, 0], alarmBulbs: [[0, 5.75, -8.7], [-12.7, 5.5, 0], [12.7, 5.5, 0], [7.2, 3.8, -9.3], [-2, 3.8, -9.6]], skyDist: 46 });
   const LG = K.LG; const m = K.makeMaterials();
   // ---- rooms (order matters: inner first) ----

@@ -8,7 +8,7 @@ export const meta = { id: 'floodgate', no: '16', name: 'Operation Floodgate', ar
 
 let water = null, spray = 0;
 export function build() {
-  K.beginLevel({ skyEnv: true, grade: { sat: 0.86, contrast: 1.14, sh: [0.9, 0.97, 1.1], hi: [1.04, 1.0, 0.96] }, bg: '#05080c', fog: '#0c1218', fogD: 0.016, sun: 2.8, sunColor: '#9ab0d0', sunPos: [-20, 30, -25], sunTarget: [0, 0, 0], shadowSize: 36, hemi: 4.6, hemiSky: '#5e6e8a', hemiGround: '#14161a', envI: 0.45,
+  K.beginLevel({ fill: 3.2, exposure: 1.38, fog: '#18202a', skyEnv: true, grade: { sat: 0.86, contrast: 1.14, sh: [0.9, 0.97, 1.1], hi: [1.04, 1.0, 0.96] }, bg: '#05080c', fogD: 0.016, sun: 2.8, sunColor: '#9ab0d0', sunPos: [-20, 30, -25], sunTarget: [0, 0, 0], shadowSize: 36, hemi: 4.6, hemiSky: '#5e6e8a', hemiGround: '#14161a', envI: 0.45,
     rain: [[-36, -22, 36, -8]], rainN: 1500, lightning: true, alarmPos: [0, 7, 2], alarmBulbs: [[-28, 5, -5.8], [28, 5, -5.8], [-25, 2.8, 10.2]], skyTop: '#04060a', skyBottom: '#18202c', city: false, skyDist: 110, alarmLight: true, police: [-33, 2, -13] });
   const LG = K.LG, m = K.makeMaterials();
   const conc = M('#ffffff', 0.85, 0.05, { map: canvasTex(256, 256, (g, w, h) => { g.fillStyle = '#6a6c6a'; g.fillRect(0, 0, w, h); const r = rng(13); for (let i = 0; i < 6000; i++) { const c = r() < 0.5 ? 0 : 255; g.fillStyle = `rgba(${c},${c},${c},.05)`; g.fillRect(r() * w, r() * h, 2, 2); } for (let y = 0; y < h; y += 64) { g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(0, y, w, 2); } for (let i = 0; i < 20; i++) { g.fillStyle = `rgba(40,50,40,${r() * 0.25})`; g.fillRect(r() * w, r() * h, 3, 20 + r() * 60); } }, { repeat: [10, 3] }) });

@@ -8,7 +8,7 @@ export const meta = { id: 'redtide', no: '12', name: 'Operation Red Tide', art: 
 
 let water = null, boat = null, zone = null;
 export function build() {
-  K.beginLevel({ skyEnv: true, grade: { sat: 0.9, contrast: 1.12, sh: [0.9, 0.98, 1.1], hi: [1.06, 1.0, 0.92] }, bg: '#05070b', fog: '#121822', fogD: 0.015, sun: 2.4, sunColor: '#9ab4e0', sunPos: [-20, 35, -15], sunTarget: [0, 0, 0], shadowSize: 34, hemi: 4.2, hemiSky: '#56648a', envI: 0.5, hemiGround: '#0a0a0c',
+  K.beginLevel({ fill: 5, exposure: 1.5, fog: '#1a2230', skyEnv: true, grade: { sat: 0.9, contrast: 1.12, sh: [0.9, 0.98, 1.1], hi: [1.06, 1.0, 0.92] }, bg: '#05070b', fogD: 0.015, sun: 2.4, sunColor: '#9ab4e0', sunPos: [-20, 35, -15], sunTarget: [0, 0, 0], shadowSize: 34, hemi: 4.2, hemiSky: '#56648a', envI: 0.5, hemiGround: '#0a0a0c',
     rain: [[-32, -28, 30, 26]], rainN: 3200, lightning: true, alarmPos: [-16, 6.5, -13], alarmBulbs: [[-6.2, 4.8, -10.4], [-6.2, 4.8, -16.6]], skyTop: '#04060c', skyBottom: '#1a2236', city: true, skyDist: 95, alarmLight: true });
   const LG = K.LG, m = K.makeMaterials();
   const conc = canvasTex(512, 512, (g, w, h) => { g.fillStyle = '#3a3c3e'; g.fillRect(0, 0, w, h); const r = rng(41); for (let i = 0; i < 9000; i++) { const c = r() < 0.5 ? 0 : 255; g.fillStyle = `rgba(${c},${c},${c},.045)`; g.fillRect(r() * w, r() * h, 2, 2); } g.strokeStyle = 'rgba(0,0,0,.35)'; g.lineWidth = 3; for (let x = 0; x <= w; x += 128) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, h); g.stroke(); g.beginPath(); g.moveTo(0, x); g.lineTo(w, x); g.stroke(); }

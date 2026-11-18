@@ -8,7 +8,7 @@ export const meta = { id: 'blacktide', no: '10', name: 'Operation Black Tide', a
 
 let water = null, flare = null, flareL = null, beacons = [];
 export function build() {
-  K.beginLevel({ skyEnv: true, grade: { sat: 0.88, contrast: 1.12, sh: [0.9, 0.98, 1.1], hi: [1.02, 1.02, 1.0] }, bg: '#05080c', fog: '#141c24', fogD: 0.014, sun: 2.2, sunColor: '#9ab0d0', sunPos: [-15, 30, 20], sunTarget: [0, 0, 0], shadowSize: 28, hemi: 4.0, hemiSky: '#5a6a84', envI: 0.45, hemiGround: '#0a0c10',
+  K.beginLevel({ fill: 3.2, exposure: 1.38, fog: '#1c2632', skyEnv: true, grade: { sat: 0.88, contrast: 1.12, sh: [0.9, 0.98, 1.1], hi: [1.02, 1.02, 1.0] }, bg: '#05080c', fogD: 0.014, sun: 2.2, sunColor: '#9ab0d0', sunPos: [-15, 30, 20], sunTarget: [0, 0, 0], shadowSize: 28, hemi: 4.0, hemiSky: '#5a6a84', envI: 0.45, hemiGround: '#0a0c10',
     rain: [[-26, -22, 26, 22]], rainN: 3200, lightning: true, alarmPos: [0, 6, 0], alarmBulbs: [[-8.2, 3, 8], [8.2, 3, 11], [0, 4, -3.2]], skyTop: '#05070c', skyBottom: '#1a2430', city: false, skyDist: 110, alarmLight: true });
   const LG = K.LG, m = K.makeMaterials();
   const grate = canvasTex(256, 256, (g, w, h) => { g.fillStyle = '#3a3e42'; g.fillRect(0, 0, w, h); g.strokeStyle = '#22262a'; g.lineWidth = 3; for (let i = 0; i <= w; i += 16) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i, h); g.stroke(); g.beginPath(); g.moveTo(0, i); g.lineTo(w, i); g.stroke(); } const r = rng(3); for (let i = 0; i < 60; i++) { g.fillStyle = `rgba(90,60,30,${r() * 0.25})`; g.beginPath(); g.ellipse(r() * w, r() * h, 6 + r() * 20, 4 + r() * 12, r() * 3, 0, 7); g.fill(); } }, { repeat: [12, 10] });

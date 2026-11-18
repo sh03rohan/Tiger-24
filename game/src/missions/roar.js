@@ -9,7 +9,7 @@ export const meta = { id: 'roar', no: '08', name: "Operation Tiger's Roar", art:
 export function build() {
   const moonSky = canvasTex(1024, 512, (g, w, h) => { const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#0a0206'); gr.addColorStop(1, '#3a0e14'); g.fillStyle = gr; g.fillRect(0, 0, w, h); g.fillStyle = '#d03030'; g.beginPath(); g.arc(760, 110, 46, 0, 7); g.fill();
     const r = rng(8); g.fillStyle = '#06030a'; g.beginPath(); g.moveTo(0, h); for (let x = 0; x <= w; x += 32) g.lineTo(x, h - 120 - r() * 160); g.lineTo(w, h); g.fill(); for (let i = 0; i < 200; i++) { g.fillStyle = 'rgba(255,255,255,.6)'; g.fillRect(r() * w, r() * h * 0.5, 1, 1); } });
-  K.beginLevel({ skyEnv: true, grade: { sat: 0.95, contrast: 1.12, sh: [1.0, 0.94, 1.0], hi: [1.06, 0.98, 0.94] }, bg: '#0a0408', fog: '#180a10', fogD: 0.016, sun: 1.1, sunColor: '#ff8a8a', sunPos: [20, 25, 25], sunTarget: [0, 0, -8], shadowSize: 32, hemi: 0.45, hemiSky: '#6a3040', hemiGround: '#100808',
+  K.beginLevel({ fill: 4, exposure: 1.4, skyEnv: true, grade: { sat: 0.95, contrast: 1.12, sh: [1.0, 0.94, 1.0], hi: [1.06, 0.98, 0.94] }, bg: '#0a0408', fog: '#180a10', fogD: 0.016, sun: 1.1, sunColor: '#ff8a8a', sunPos: [20, 25, 25], sunTarget: [0, 0, -8], shadowSize: 32, hemi: 0.45, hemiSky: '#6a3040', hemiGround: '#100808',
     alarmPos: [0, 4, -18], alarmBulbs: [[0, 4.2, -9.8], [-20, 4.6, 0], [20, 4.6, 0]], skyTex: moonSky, skyDist: 80 });
   const LG = K.LG, m = K.makeMaterials();
   const rockT = canvasTex(256, 256, (g, w, h) => { g.fillStyle = '#3a3634'; g.fillRect(0, 0, w, h); const r = rng(9); for (let i = 0; i < 5000; i++) { const c = 40 + r() * 50; g.fillStyle = `rgba(${c + 8},${c},${c - 4},.5)`; g.fillRect(r() * w, r() * h, 2, 2); } }, { repeat: [30, 30] });

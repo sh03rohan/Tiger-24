@@ -8,7 +8,7 @@ export const meta = { id: 'runway', no: '09', name: 'Operation Runway', art: 'pl
 
 let beacon = null, ckDoor = null;
 export function build() {
-  K.beginLevel({ grade: { sat: 0.98, contrast: 1.1, sh: [0.92, 0.98, 1.1], hi: [1.05, 1.0, 0.94] }, bg: '#04060c', fog: '#070a14', fogD: 0.012, sun: 0.7, sunColor: '#9fb4ff', sunPos: [-20, 30, 10], sunTarget: [0, 0, 0], shadowSize: 22, hemi: 0.45,
+  K.beginLevel({ fill: 0, exposure: 0.92, grade: { sat: 0.98, contrast: 1.1, sh: [0.92, 0.98, 1.1], hi: [1.05, 1.0, 0.94] }, bg: '#04060c', fog: '#070a14', fogD: 0.012, sun: 0.7, sunColor: '#9fb4ff', sunPos: [-20, 30, 10], sunTarget: [0, 0, 0], shadowSize: 22, hemi: 0.45,
     alarmPos: [0, 2.2, 0], alarmBulbs: [], skyTop: '#02030a', skyBottom: '#141c30', city: true, skyDist: 80, alarmLight: false, police: [-9, -2.5, 9], dustOpacity: 0.3 });
   const LG = K.LG, m = K.makeMaterials();
   const white = M('#e9ebee', 0.32, 0.15), stripe = M('#c8202a', 0.4, 0.1), belly = M('#9aa0a8', 0.45, 0.3), cabinWall = M('#ffffff', 0.7, 0, { map: canvasTex(256, 256, (g, w, h) => { g.fillStyle = '#d9d6cf'; g.fillRect(0, 0, w, h); const r = rng(3); for (let i = 0; i < 1500; i++) { g.fillStyle = `rgba(0,0,0,${r() * 0.04})`; g.fillRect(r() * w, r() * h, 2, 2); } g.fillStyle = 'rgba(0,0,0,.08)'; g.fillRect(0, 0, w, 3); }, { repeat: [8, 1] }) });

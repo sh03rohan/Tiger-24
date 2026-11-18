@@ -96,6 +96,18 @@ const GradeShader = {
       c*=mix(sh,hi,smoothstep(0.05,0.8,l)); float v=smoothstep(0.12,0.62,r2*2.0); c*=1.0-vig*v; c=mix(c,c*vec3(1.0,0.25,0.2),hurt*v*0.8);
       c+=(hash(vUv*res+fract(time)*61.0)-0.5)*grain; gl_FragColor=vec4(clamp(c,0.,1.),1.); }`,
 };
+/* rim light for characters: a cool edge glow that keeps people readable against dark night scenes (strength set per level) */
+export const RIM = { k: { value: 0 }, soft: { value: 0 }, c: { value: new THREE.Color('#b4c8ec') } };
+const _rimCache = new Map();
+function rimMat(m, soft) {
+  if (!m || !m.isMeshStandardMaterial) return m; if (m.userData.rim) return m; const key = m.uuid + (soft ? 's' : ''); let r = _rimCache.get(key); if (r) return r;
+  r = m.clone(); r.userData.rim = true; r.customProgramCacheKey = () => 'rim1';
+  r.onBeforeCompile = sh => { sh.uniforms.rimK = soft ? RIM.soft : RIM.k; sh.uniforms.rimC = RIM.c;
+    sh.fragmentShader = 'uniform float rimK;\nuniform vec3 rimC;\n' + sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n{ float fr = 1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0); totalEmissiveRadiance += rimC * rimK * pow(fr, 2.6); }'); };
+  _rimCache.set(key, r); return r;
+}
+// enemies get the full rim; teammates and civilians a softer one so the people you must shoot stand out
+export function rimify(root, soft = false) { root.traverse(o => { if (o.isMesh && !o.userData.hitbox) o.material = Array.isArray(o.material) ? o.material.map(x => rimMat(x, soft)) : rimMat(o.material, soft); }); }
 const geoCache = new Map();
 function cg(key, fn) { if (!geoCache.has(key)) geoCache.set(key, fn()); return geoCache.get(key); }
 export const B = (w, h, d) => cg(`B${w},${h},${d}`, () => new THREE.BoxGeometry(w, h, d));

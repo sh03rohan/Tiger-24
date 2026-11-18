@@ -1,5 +1,5 @@
 // Tiger 24 — level kit: shared geometry helpers, colliders, ray tests, doors, glass, props, navigation, environment
-import { THREE, CANNON, G, PI, TAU, M, B, RB, C, SP, PL, RX, add, canvasTex, rng, clamp, R, rr, A, FX, emitNoise, V3, setSkyEnv } from './core.js';
+import { THREE, CANNON, G, PI, TAU, M, B, RB, C, SP, PL, RX, add, canvasTex, rng, clamp, R, rr, A, FX, emitNoise, V3, setSkyEnv, RIM, renderer } from './core.js';
 
 export const colliders = [];       // {min,max,mat,pen,low,on,mesh,body,door,glass,dyn,id}
 export const doors = [];
@@ -311,7 +311,7 @@ export function unloadLevel() {
   colliders.length = 0; doors.length = 0; glassPanes.length = 0; rooms.length = 0; interactables.length = 0; anchors.length = 0; lightPool.length = 0;
   lights.cams = []; lights.bars = []; lights.alarmBulbs = []; lights.rain = null; lights.police = null; lights.alarm = null; lights.moon = null; lights.skyMat = null;
   for (const k of Object.keys(LV)) delete LV[k]; smokes.length = 0; lights.dust = null; lights.shafts = [];
-  if (G.pmrem) setSkyEnv(null); LG = null;
+  if (G.pmrem) setSkyEnv(null); LG = null; renderer.toneMappingExposure = 1.05; RIM.k.value = 0; RIM.soft.value = 0;
 }
 export function beginLevel(env = {}) {
   unloadLevel(); makeMaterials(); ENV = env;
@@ -345,6 +345,10 @@ export function beginLevel(env = {}) {
       vertexShader: 'uniform float px; varying float vA; void main(){ vec4 mv = modelViewMatrix*vec4(position,1.); float d = -mv.z; vA = smoothstep(0.6,1.6,d) * (1.0 - smoothstep(4.5,7.0,d)); gl_PointSize = clamp(px*0.012/d, 1.0, 4.0); gl_Position = projectionMatrix*mv; }',
       fragmentShader: 'uniform vec3 col; uniform float op; varying float vA; void main(){ vec2 c = gl_PointCoord-0.5; float a = smoothstep(0.5,0.0,length(c)) * op * vA; gl_FragColor = vec4(col*a, a); }' });
     const pts = new THREE.Points(dg, dm); pts.frustumCulled = false; LG.add(pts); lights.dust = { pts, pos, base, n }; }
+  // night readability: lift exposure, add a cool moonlight fill and a rim on characters so enemies stand out (still ~60-70% dark)
+  const bgc = new THREE.Color(env.bg || '#05070a'); const bgL = bgc.r * 0.2126 + bgc.g * 0.7152 + bgc.b * 0.0722; const night = env.night ?? bgL < 0.008;
+  renderer.toneMappingExposure = env.exposure ?? (night ? 1.18 : 1.05); RIM.k.value = env.rim ?? (night ? 0.3 : 0.08); RIM.soft.value = RIM.k.value * 0.3;
+  if (night && (env.fill ?? 0.6) > 0) LG.add(new THREE.AmbientLight(env.fillColor || '#8a9cc4', env.fill ?? 0.6)); lights.night = night;
   lights.shafts = [];
   return LG;
 }

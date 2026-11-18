@@ -8,7 +8,7 @@ export const meta = { id: 'deepblue', no: '02', name: 'Operation Deep Blue', art
 
 let sea = null;
 export function build() {
-  K.beginLevel({ skyEnv: true, grade: { sat: 0.95, contrast: 1.1, sh: [0.9, 1.0, 1.1], hi: [1.0, 1.02, 1.02] }, bg: '#04070a', fog: '#071016', fogD: 0.02, sun: 1.8, sunColor: '#8aa6d8', hemi: 3.5, hemiSky: '#5a6a88', sunPos: [-8, 14, 30], sunTarget: [0, 0, -4], shadowSize: 24, rain: [[-14, -46, 14, 36]], rainN: 3000, lightning: true,
+  K.beginLevel({ fill: 1.8, exposure: 1.3, skyEnv: true, grade: { sat: 0.95, contrast: 1.1, sh: [0.9, 1.0, 1.1], hi: [1.0, 1.02, 1.02] }, bg: '#04070a', fog: '#071016', fogD: 0.02, sun: 1.8, sunColor: '#8aa6d8', hemi: 3.5, hemiSky: '#5a6a88', sunPos: [-8, 14, 30], sunTarget: [0, 0, -4], shadowSize: 24, rain: [[-14, -46, 14, 36]], rainN: 3000, lightning: true,
     alarmPos: [0, 4.2, -30], alarmBulbs: [[0, 4.6, -27.8], [-4, 3.2, 17.8]], skyTop: '#03050a', skyBottom: '#141e2a', city: false, skyDist: 70,  hemiSky: '#334058' });
   const LG = K.LG, m = K.makeMaterials();
   const plate = canvasTex(256, 256, (g, w, h) => { g.fillStyle = '#4a4f50'; g.fillRect(0, 0, w, h); const r = rng(3); for (let i = 0; i < 3000; i++) { const c = r() < 0.5 ? 20 : 120; g.fillStyle = `rgba(${c},${c - 10},${c - 20},.12)`; g.fillRect(r() * w, r() * h, 2, 2); }
