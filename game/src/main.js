@@ -4,10 +4,11 @@ import { initTextures, setAnimTime, TEX } from './assets.js';
 import { updateLevel, LV, unloadLevel, colliders, doors, rooms, lights, buildNav } from './levelkit.js';
 import { initPlayer, updatePlayer, P, requestLock, releaseLock, applyLoadout, PRIMARIES, SECONDARIES } from './player.js';
 import { updateRagdolls, clearAgents } from './ai.js';
-import { startMission, updateMission, installHooks, MS, cutWire, closeDefuse, fmt, PROFILE, saveProfile, rankInfo, missionStatus, CUR } from './mission.js';
+import { startMission, updateMission, installHooks, MS, cutWire, closeDefuse, fmt, PROFILE, saveProfile, rankInfo, missionStatus, CUR, failMission } from './mission.js';
 import { initHUD, updateHUD, defuseUpdate, buildMapImage } from './hud.js';
 import { MISSIONS } from './missions/index.js';
 import { LOBBY, buildLobby, setLobbyCam, showLobby, updateLobby, missionArt, SQUAD_INFO, tagPositions } from './lobby.js';
+import { NET, COLORS, connect, available, hostGame, joinGame, leaveGame, openGames, players, hostPeer, setReady, updateSetup, setProfile, onMissionStart, onMissionLeave, netTick, puppetUpdate, installNetHooks } from './net.js';
 
 const ARTS = {}; let selMission = null, plan = { entry: null, diff: store.get('diff', 'veteran') }, focusOp = null, menuIdx = 0, loTab = 'primary';
 const SCREENS = ['splash', 'lobbyUI', 'planning', 'hud', 'pause', 'debrief', 'loading'];
@@ -18,12 +19,14 @@ function show(id) {
 
 /* ================= boot ================= */
 function boot() {
-  initGraphics($('view')); FX.init(); VO.init(); initTextures(); buildLobby(); initPlayer(); installHooks(); initHUD();
+  initGraphics($('view')); FX.init(); VO.init(); initTextures(); buildLobby(); initPlayer(); installHooks(); installNetHooks(); initHUD();
   applyLoadout(PROFILE.loadout); syncLobbyLoadout();
   MISSIONS.forEach(m => ARTS[m.meta.id] = missionArt(m.meta.art));
   G.hooks.cut = cutWire; G.hooks.defuseUpdate = defuseUpdate;
   G.hooks.defuse = on => { $('defuse').hidden = !on; if (on) defuseUpdate(); };
   G.hooks.pause = pause; G.hooks.debrief = debrief; G.hooks.levelReady = () => { buildMapImage(); const op = document.querySelector('#hud .op'); if (op && CUR) op.textContent = CUR.meta.name.toUpperCase(); };
+  G.hooks.mpStart = g => mpClientStart(g); G.hooks.mpHostGone = () => backToLobby(); G.hooks.mpWipe = () => failMission('Puro team down', 'Shob operator KIA.');
+  G.hooks.mpRefresh = () => { if (G.state === 'lobby' && LOBBY.screen === 'multi') renderMulti(); };
   window.addEventListener('keydown', onKey);
   setupLobbyUI(); setupPlanning(); setupPause(); setupDebrief();
   $('rotate').addEventListener('click', () => $('rotate').classList.add('off'));
@@ -48,8 +51,8 @@ function enterLobby() { if (G.state !== 'splash') return; A.init(); A.startAmbie
 
 /* ================= lobby UI ================= */
 const MENU = [
-  { id: 'campaign', t: 'Campaign', s: '12 ta mission · Black Crescent ar Red Tide' }, { id: 'quick', t: 'Continue', s: 'Porer unlock hoya mission e shoja' },
-  { id: 'squad', t: 'Squad', s: '3 jon teammate bachai korun' }, { id: 'loadout', t: 'Loadout', s: 'Gun, sidearm, gadget ar camo' }, { id: 'settings', t: 'Settings', s: 'Graphics, sound, controls' },
+  { id: 'campaign', t: 'Campaign', s: '16 ta mission · Black Crescent ar Red Tide' }, { id: 'quick', t: 'Continue', s: 'Porer unlock hoya mission e shoja' },
+  { id: 'multi', t: 'Multiplayer', s: 'Bondhuder sathe co-op · 2-4 jon' }, { id: 'squad', t: 'Squad', s: '3 jon teammate bachai korun' }, { id: 'loadout', t: 'Loadout', s: 'Gun, sidearm, gadget ar camo' }, { id: 'settings', t: 'Settings', s: 'Graphics, sound, controls' },
 ];
 function setupLobbyUI() {
   const menu = $('menu'); MENU.forEach((m, i) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'mi'; b.innerHTML = `<span class="t">${m.t}</span><span class="s">${m.s}</span>`;
@@ -63,10 +66,10 @@ function setMenu(i, silent) { if (menuIdx === i && $('menu').children[i].classLi
 function pickMenu(i) { const m = MENU[i]; A.ui(); if (m.id === 'quick') { const idx = MISSIONS.findIndex((x, k) => missionStatus(k) === 'new'); openPlanning(MISSIONS[idx >= 0 ? idx : 0].meta.id); return; } goLobby(m.id); }
 function goLobby(id) {
   LOBBY.screen = id; setLobbyCam(id);
-  for (const s of ['main', 'campaign', 'squad', 'loadout', 'settings']) $('s-' + s).hidden = s !== id;
+  for (const s of ['main', 'campaign', 'multi', 'squad', 'loadout', 'settings']) $('s-' + s).hidden = s !== id;
   $('crumb').innerHTML = id === 'main' ? 'Lobby / <b>Main</b>' : `Lobby / <b>${id[0].toUpperCase() + id.slice(1)}</b>`; $('crumbBack').hidden = id === 'main';
   if (id === 'campaign') { if (!selMission) { const idx = MISSIONS.findIndex((x, k) => missionStatus(k) === 'new'); selMission = MISSIONS[idx >= 0 ? idx : 0].meta.id; } renderCampaign(); }
-  if (id === 'squad') renderSquad(); if (id === 'loadout') renderLoadout(); if (id === 'settings') renderSettings($('lobbySettings'));
+  if (id === 'multi') renderMulti(); if (id === 'squad') renderSquad(); if (id === 'loadout') renderLoadout(); if (id === 'settings') renderSettings($('lobbySettings'));
   if (id === 'main') { setMenu(menuIdx, true); renderProfile(); }
   $('shade').style.opacity = id === 'squad' ? 0.55 : 1;
 }
@@ -176,17 +179,20 @@ function drawBlueprint() {
 }
 function deploy() {
   A.init(); A.startAmbience(); A.setVol(); applyLoadout(PROFILE.loadout);
-  G.state = 'playing'; show('hud'); startMission(selMission, plan.entry, plan.diff, PROFILE.squad); G.sway = LV.sway || 0; G.shakeAmb = LV.shake || 0;
+  G.state = 'playing'; show('hud'); startMission(selMission, plan.entry, plan.diff, NET.on ? [] : PROFILE.squad); G.sway = LV.sway || 0; G.shakeAmb = LV.shake || 0;
+  if (NET.on) { MS.netClient = NET.client; onMissionStart(); }
   if (!G.mobile) requestLock();
   setTimeout(() => G.hooks.toast && G.hooks.toast(G.mobile ? 'Bam dike joystick, dane drag kore aim' : 'Screen e click korle mouse lock hobe · Esc = pause'), 500);
 }
 function backToLobby() {
+  if (NET.on && NET.inMission) onMissionLeave();
   G.state = 'lobby'; G.hooks.toastClear && G.hooks.toastClear(); VO.stop(); A.alarm(false); releaseLock(); clearAgents(); unloadLevel(); G.sway = 0; G.shakeAmb = 0; G.defusing = false; $('defuse').hidden = true;
-  showLobby(true); show('lobbyUI'); goLobby(LOBBY.screen === 'main' ? 'campaign' : LOBBY.screen); renderProfile();
+  showLobby(true); show('lobbyUI'); goLobby(NET.on ? 'multi' : LOBBY.screen === 'main' ? 'campaign' : LOBBY.screen); renderProfile();
 }
 
 /* ================= pause & debrief ================= */
-function pause() { if (G.state !== 'playing') return; G.state = 'paused'; releaseLock(); VO.stop(); show('pause'); renderSettings($('settings')); $('pzTitle').textContent = CUR ? CUR.meta.name : ''; }
+function pause() { if (G.state !== 'playing') return; G.state = 'paused'; releaseLock(); VO.stop(); show('pause'); renderSettings($('settings')); $('pzTitle').textContent = CUR ? CUR.meta.name : '';
+  $('restartBtn').hidden = $('planBtn').hidden = NET.on; $('lobbyBtn').textContent = NET.on ? (NET.host ? 'Mission bondho (shobai lobby te)' : 'Mission chere dao') : 'Lobby'; }
 function resume() { if (G.state !== 'paused') return; G.state = 'playing'; show('hud'); if (!G.mobile) requestLock(); }
 function restart() { G.state = 'playing'; show('hud'); startMission(selMission, G.entry, G.diff, PROFILE.squad); G.sway = LV.sway || 0; G.shakeAmb = LV.shake || 0; if (!G.mobile) requestLock(); }
 function setupPause() {
@@ -204,31 +210,99 @@ function debrief(r) {
   $('dbStars').innerHTML = [0, 1, 2].map(i => `<i class="${i < r.stars ? 'on' : ''}">★</i>`).join(''); $('dbGrade').textContent = r.grade; $('dbScore').textContent = r.total; $('dbBest').textContent = r.isBest ? 'Notun best score!' : `Best: ${r.best}`;
   $('dbRows').innerHTML = r.rows.map(([k, v, p]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td><td class="${p < 0 ? 'neg' : p > 0 ? 'pos' : ''}">${p > 0 ? '+' : ''}${p}</td></tr>`).join('');
   const s = G.stats; $('dbStats').innerHTML = [['Shots', s.shots], ['Hits', s.hits], ['Headshot', s.headshots], ['Accuracy', Math.round(r.acc * 100) + '%'], ['Damage taken', Math.round(s.damageTaken)], ['Flashbang', s.flashes], ['Revive', s.revives], ['Alarm', s.alarm ? 'Yes' : 'No']].map(([k, v]) => `<div><span>${k}</span><b>${v}</b></div>`).join('');
-  const i = MISSIONS.findIndex(m => m.meta.id === selMission); $('nextBtn').hidden = !(r.ok && i < MISSIONS.length - 1);
+  const i = MISSIONS.findIndex(m => m.meta.id === selMission); $('nextBtn').hidden = !(r.ok && i < MISSIONS.length - 1) || NET.on; $('retryBtn').hidden = NET.on; $('lobbyBtn2').textContent = NET.on ? 'Co-op lobby' : 'Lobby';
   if (r.ok && i === MISSIONS.length - 1) $('dbSub').textContent += ' · CAMPAIGN COMPLETE!';
+}
+
+/* ================= co-op multiplayer ================= */
+let mpSel = { m: null, d: store.get('diff', 'veteran') }, mpTimer = null;
+function mpMissions() { return MISSIONS.filter((m, i) => missionStatus(i) !== 'lock'); }
+function mpHostStart() {
+  if (!NET.host) return; const id = (NET.game && NET.game.m) || mpSel.m || MISSIONS[0].meta.id; selMission = id;
+  show('loading'); $('ldTitle').textContent = MISSIONS.find(m => m.meta.id === id).meta.name; $('ldLoc').textContent = 'Co-op mission load hocche…'; $('loading').style.backgroundImage = `url(${ARTS[id]})`;
+  setTimeout(() => { showLobby(false); plan.entry = store.get('entry.' + id, '') || 'auto'; plan.diff = (NET.game && NET.game.d) || mpSel.d; clearAgents(); deploy(); }, 60);
+}
+function mpClientStart(g) {
+  selMission = g.m; plan.entry = g.e; plan.diff = g.d; G.hooks.toastClear && G.hooks.toastClear();
+  show('loading'); $('ldTitle').textContent = (MISSIONS.find(m => m.meta.id === g.m) || MISSIONS[0]).meta.name; $('ldLoc').textContent = 'Host mission shuru korse…'; $('loading').style.backgroundImage = `url(${ARTS[g.m]})`;
+  setTimeout(() => { showLobby(false); clearAgents(); deploy(); NET.loading = false; if (!G.mobile) setTimeout(() => G.hooks.toast && G.hooks.toast('Screen e click korle mouse lock hobe'), 1500); }, 60);
+}
+function renderMulti() {
+  const box = $('mpBody'); if (!box) return; clearInterval(mpTimer); mpTimer = setInterval(() => { if (G.state === 'lobby' && LOBBY.screen === 'multi') renderMulti(); else clearInterval(mpTimer); }, 1500);
+  if (document.activeElement && box.contains(document.activeElement) && document.activeElement.tagName === 'INPUT') return; // don't wipe what the player is typing
+  const sw = COLORS.map((c, i) => `<button type="button" class="mpc ${i === NET.color ? 'on' : ''}" data-c="${i}" style="--c:${c}" aria-label="Rong ${i + 1}"></button>`).join('');
+  const err = NET.error ? `<p class="mperr">${esc(NET.error)}</p>` : '';
+  if (!available()) {
+    box.innerHTML = `<div class="panel mpwide"><h3>Multiplayer ei jaygay chole na</h3><p class="mpmuted">Co-op er jonno ekta connection lage. Dui upay:</p>
+      <ol class="mpol"><li><b>claude.ai</b> te ei game ta open korun ar bondhuder sathe share korun. Shobai ek shathe page ta khulle ekjon host korbe, baki ra code diye join korbe.</li>
+      <li>Nijer server: repo theke <code>node server/relay.mjs</code> chalan, tarpor niche relay address din (jemon <code>ws://192.168.0.5:8787</code>).</li></ol>
+      <div class="mprow"><input id="mpRelay" placeholder="ws://host:8787" value="${esc(store.get('relay', ''))}" maxlength="120"><button type="button" class="btn" id="mpRelaySave">Save</button></div></div>`;
+    $('mpRelaySave').addEventListener('click', () => { store.set('relay', $('mpRelay').value.trim()); A.ui(); renderMulti(); }); return;
+  }
+  if (!NET.on) {
+    const opts = mpMissions().map(m => `<option value="${m.meta.id}" ${m.meta.id === (mpSel.m || mpMissions()[0].meta.id) ? 'selected' : ''}>${esc(m.meta.no + ' · ' + m.meta.name.replace('Operation ', ''))}</option>`).join('');
+    const games = openGames();
+    box.innerHTML = `<div class="panel"><h3>Tomar operator</h3><label class="mpl">Callsign<input id="mpName" maxlength="14" value="${esc(NET.name || '')}" placeholder="Shadow"></label><div class="mpl">Rong<div class="mpcs">${sw}</div></div>
+      <h3>Game host koro</h3><label class="mpl">Mission<select id="mpMission">${opts}</select></label>
+      <div class="mpl">Difficulty<div class="seg" id="mpDiff">${['recruit', 'veteran', 'elite'].map(d => `<button type="button" data-d="${d}" class="${d === mpSel.d ? 'on' : ''}">${d}</button>`).join('')}</div></div>
+      <button type="button" class="btn pri" id="mpHost">Host game</button>${err}</div>
+      <div class="panel"><h3>Join koro</h3><div class="mprow"><input id="mpCode" maxlength="4" placeholder="CODE" autocomplete="off"><button type="button" class="btn" id="mpJoin">Join</button></div>
+      <h3>Khola game ${games.length ? '' : '<span class="mpmuted">· ekhon keu host korche na</span>'}</h3><div class="mpgames">${games.map(g => `<button type="button" class="mpg" data-code="${esc(g.code)}"><b>${esc((g.h || 'Tiger').toUpperCase())}</b><span>${esc(g.m || '')} · ${g.n || 1} jon · ${g.st === 'play' ? 'mission cholche' : 'lobby'}</span><em>${esc(String(g.code).toUpperCase())}</em></button>`).join('')}</div>
+      <p class="mpmuted">${NET.transport === 'claude' ? 'Ei artifact je page e khola ache, sekhane thaka shobai ek room e.' : NET.transport === 'relay' ? 'Relay server e connected.' : 'Host/join chaple connect hobe.'}</p></div>`;
+    const saveName = () => setProfile($('mpName').value, NET.color);
+    $('mpName').addEventListener('change', saveName);
+    box.querySelectorAll('.mpc').forEach(b => b.addEventListener('click', () => { setProfile($('mpName').value, +b.dataset.c); A.ui(); renderMulti(); }));
+    $('mpMission').addEventListener('change', e => { mpSel.m = e.target.value; });
+    $('mpDiff').querySelectorAll('button').forEach(b => b.addEventListener('click', () => { mpSel.d = b.dataset.d; A.ui(); renderMulti(); }));
+    $('mpHost').addEventListener('click', async () => { saveName(); NET.error = ''; A.ui(); mpSel.m = $('mpMission').value; const m = MISSIONS.find(x => x.meta.id === mpSel.m);
+      const ok = await hostGame({ m: mpSel.m, d: mpSel.d, mname: m.meta.name }); if (!ok && !NET.error) NET.error = 'Connect kora jay ni'; renderMulti(); });
+    const join = async code => { saveName(); NET.error = ''; A.ui(); $('mpBody').querySelector('#mpJoin') && ($('mpJoin').textContent = '…'); await joinGame(code); renderMulti(); };
+    $('mpJoin').addEventListener('click', () => join($('mpCode').value)); $('mpCode').addEventListener('keydown', e => { if (e.key === 'Enter') join($('mpCode').value); });
+    box.querySelectorAll('.mpg').forEach(b => b.addEventListener('click', () => join(b.dataset.code)));
+    if (!NET.transport) connect().then(() => { if (LOBBY.screen === 'multi') renderMulti(); });
+    return;
+  }
+  const ps = players(); const g = NET.host ? NET.game : ((hostPeer() || {}).presence || {}).g || {};
+  const gm = MISSIONS.find(m => m.meta.id === g.m); const allReady = ps.every(p => p.presence.r === 'h' || p.presence.rd);
+  const list = ps.sort((a, b) => (b.presence.r === 'h') - (a.presence.r === 'h')).map(p => `<div class="mpp"><i style="background:${COLORS[(p.presence.c || 0) % COLORS.length]}"></i><b>${esc((p.presence.n || 'Tiger').toUpperCase())}${p.isMe ? ' <small>(tumi)</small>' : ''}</b><span>${p.presence.r === 'h' ? 'HOST' : p.presence.ph === 'play' ? 'MISSION E' : p.presence.rd ? 'READY' : 'WAITING'}</span></div>`).join('');
+  const opts = mpMissions().map(m => `<option value="${m.meta.id}" ${m.meta.id === g.m ? 'selected' : ''}>${esc(m.meta.no + ' · ' + m.meta.name.replace('Operation ', ''))}</option>`).join('');
+  box.innerHTML = `<div class="panel"><div class="mpcode"><span>GAME CODE</span><b>${esc(String(NET.code).toUpperCase())}</b><small>Bondhuke ei code ta din</small></div><h3>Squad · ${ps.length}/4</h3><div class="mpplist">${list}</div>
+      <button type="button" class="btn" id="mpLeave">Leave</button>${err}</div>
+    <div class="panel"><h3>Mission</h3>${gm ? `<div class="mpart" style="background-image:url(${ARTS[gm.meta.id]})"><b>${esc(gm.meta.name)}</b><span>${esc(gm.meta.type)} · ${esc(g.d || '')}</span></div>` : ''}
+      ${NET.host ? `<label class="mpl">Mission<select id="mpMission">${opts}</select></label><div class="mpl">Difficulty<div class="seg" id="mpDiff">${['recruit', 'veteran', 'elite'].map(d => `<button type="button" data-d="${d}" class="${d === g.d ? 'on' : ''}">${d}</button>`).join('')}</div></div>
+      <button type="button" class="btn pri" id="mpStart" ${ps.length < 1 ? 'disabled' : ''}>Mission shuru koro</button><p class="mpmuted">${allReady ? 'Shobai ready.' : 'Kichu player ekhono ready na, tobuo shuru kora jabe.'} AI squad thakbe na: tomra nijerai team.</p>`
+      : `<p class="mpmuted">Host mission ar difficulty bachai korbe. Host shuru korlei tomar mission load hobe.</p><button type="button" class="btn ${NET.ready ? '' : 'pri'}" id="mpReady">${NET.ready ? 'Ready na' : 'Ready'}</button>`}
+      <p class="mpmuted">Co-op niyom: enemy ar hostage host er game e chole. Keu down hole teammate kache giye F hold kore revive korte pare, na hole 25 second por respawn.</p></div>`;
+  $('mpLeave').addEventListener('click', async () => { A.ui(); await leaveGame(); renderMulti(); });
+  if (NET.host) { $('mpMission').addEventListener('change', e => { const m = MISSIONS.find(x => x.meta.id === e.target.value); updateSetup({ m: m.meta.id, mname: m.meta.name }); renderMulti(); });
+    $('mpDiff').querySelectorAll('button').forEach(b => b.addEventListener('click', () => { updateSetup({ d: b.dataset.d }); A.ui(); renderMulti(); }));
+    $('mpStart').addEventListener('click', () => { A.ui(); mpHostStart(); }); }
+  else $('mpReady').addEventListener('click', () => { setReady(!NET.ready); A.ui(); renderMulti(); });
 }
 
 /* ================= loop ================= */
 function tick(dt) {
   G.time += dt; setAnimTime(G.time); G.dt = dt;
-  G.world.step(1 / 60, dt, 3); updatePlayer(dt);
-  for (const a of G.agents) if (a.alive && !a.hidden) a.update(dt);
+  G.world.step(1 / 60, dt, 3); if (G.state === 'playing') updatePlayer(dt);
+  const puppets = NET.client && NET.inMission;
+  for (const a of G.agents) if (a.alive && !a.hidden) { if (puppets && a.puppet) puppetUpdate(a, dt); else a.update(dt); }
   updateRagdolls(dt); updateLevel(dt, G.time, MS.alarm); updateMission(dt); FX.update(dt); updateHUD(dt); A.listener(G.camera);
 }
-G.debugStep = (n, dt = 1 / 30) => { for (let i = 0; i < n && G.state === 'playing'; i++) { G.scene.updateMatrixWorld(); tick(dt); } };
-G.debug = { openPlanning: id => openPlanning(id), deploy: () => deploy(), setEntry: e => { plan.entry = e; }, setDiff: d => { plan.diff = d; }, backToLobby };
+G.debugStep = (n, dt = 1 / 30) => { for (let i = 0; i < n && G.state === 'playing'; i++) { G.scene.updateMatrixWorld(); tick(dt); netTick(dt); } };
+G.debug = { openPlanning: id => openPlanning(id), deploy: () => deploy(), setEntry: e => { plan.entry = e; }, setDiff: d => { plan.diff = d; }, backToLobby, goLobby, mpHostStart: () => mpHostStart(), NET };
 const clock = new THREE.Clock(); let planT = 0, frameN = 0;
 function loop() {
   requestAnimationFrame(loop);
   const dt = Math.min(clock.getDelta(), 0.05);
-  if (G.state === 'playing') tick(dt);
+  netTick(dt);
+  if (G.state === 'playing' || (G.state === 'paused' && NET.on && NET.inMission)) tick(dt);
   else if (G.state === 'lobby' || G.state === 'splash') { G.time += dt; setAnimTime(G.time); updateLobby(dt, G.time, PROFILE.squad, focusOp);
     if (LOBBY.screen === 'squad' && G.state === 'lobby') { const rect = G.host.getBoundingClientRect(); const pos = tagPositions(rect); for (const [id, p] of Object.entries(pos)) { const el = $('tag-' + id); el.hidden = !p.vis; el.style.left = p.x + 'px'; el.style.top = p.y + 'px'; el.classList.toggle('off', id !== 'shadow' && !PROFILE.squad.includes(id)); } } else for (const el of $('tags').children) el.hidden = true; }
   else if (G.state === 'planning') { planT += dt; G.time += dt; updateLevel(dt, G.time, false); const b = LV.bounds; const cx = (b.x0 + b.x1) / 2, cz = (b.z0 + b.z1) / 2, rad = Math.max(b.x1 - b.x0, b.z1 - b.z0) * 0.42; const a = planT * 0.05; const cam = G.camera;
     cam.position.set(cx + Math.sin(a) * rad, Math.max(6, rad * 0.45), cz + Math.cos(a) * rad); cam.lookAt(cx, 0, cz); if (cam.fov !== 55) { cam.fov = 55; cam.updateProjectionMatrix(); } }
   frameN++; if (frameN % 2 === 0 || G.state !== 'playing') renderer.shadowMap.needsUpdate = true;
   if (G.grade) { const u = G.grade.uniforms; u.time.value = G.time; const hv = G.state === 'playing' && P.alive !== false ? clamp((55 - P.hp) / 55, 0, 1) : 0; u.hurt.value += (hv - u.hurt.value) * Math.min(1, dt * 4); }
-  if (!G.noRender) G.composer.render();
+  if (!G.noRender) G.composer.render(); else G.scene.updateMatrixWorld();
 }
 window.addEventListener('error', e => { const b = $('boot'); if (b && !b.hidden) { b.classList.add('err'); b.textContent = 'Game load hote problem: ' + e.message; } });
 try { await Promise.race([document.fonts.load('800 64px "Saira Condensed"'), new Promise(r => setTimeout(r, 1500))]); } catch (e) { }

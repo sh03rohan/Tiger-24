@@ -162,11 +162,19 @@ export function installHooks() {
 export function closeDefuse() { G.defusing = false; G.hooks.defuse && G.hooks.defuse(false); }
 export function cutWire(idx) {
   const it = MS.curBomb; if (!G.defusing || !it || it.defused) return; const w = COLORS[idx]; if (it.cut.includes(w.k)) return;
+  if (MS.netClient) { // co-op client: the host decides; show the result of a correct cut straight away
+    const need = it.wires[it.cut.length]; G.hooks.netAct && G.hooks.netAct('cut', interactables.indexOf(it), w.k);
+    if (need && w.k === need.k) { it.cut.push(w.k); A.snip(); if (it.cut.length === 4) { it.defused = true; it.used = true; A.beep(true); closeDefuse(); } } else { A.buzz(); toast('Bhul wire! Timer 90 second kome gelo'); closeDefuse(); }
+    G.hooks.defuseUpdate && G.hooks.defuseUpdate(); return;
+  }
+  applyCut(it, w.k); G.hooks.defuseUpdate && G.hooks.defuseUpdate();
+}
+export function applyCut(it, k) {
+  if (it.defused || it.cut.includes(k)) return; const w = COLORS.find(c => c.k === k); if (!w) return;
   const need = it.wires[it.cut.length];
   if (w.k === need.k) { it.cut.push(w.k); A.snip(); if (it.cut.length === 4) { it.defused = true; it.used = true; A.beep(true); closeDefuse(); const left = bombs().filter(b => !b.defused).length;
       radio('SHADOW', left ? `Bomb defused. ${left} to go.` : 'Bomb defused.', left ? `Shadow: Ekta bomb defuse. Ar ${left} ta baki.` : 'Shadow: Bomb defuse hoye gese.', { prio: true }); toast(left ? `Bomb defused · ar ${left} ta` : 'Shob bomb defused (+250)'); if (!left) G.hooks.banner && G.hooks.banner('BOMB DEFUSED', ''); } }
-  else { MS.wrong++; A.buzz(); MS.timer = Math.max(5, MS.timer - 90); toast('Bhul wire! Timer 90 second kome gelo'); if (MS.wrong >= 2) { closeDefuse(); explode(); } }
-  G.hooks.defuseUpdate && G.hooks.defuseUpdate();
+  else { MS.wrong++; A.buzz(); MS.timer = Math.max(5, MS.timer - 90); toast('Bhul wire! Timer 90 second kome gelo'); if (MS.wrong >= 2) { if (MS.curBomb === it) closeDefuse(); explode(); } }
 }
 export const bombs = () => interactables.filter(i => i.kind === 'bomb');
 function explode() {
@@ -176,7 +184,23 @@ function explode() {
 
 /* ================= update ================= */
 let percT = 0;
+// co-op client: the host runs the mission; here only timers, bomb lights and map spotting
+function clientUpdate(dt) {
+  if (MS.ended) { MS.endT += dt; return; }
+  const allDefused = bombs().length > 0 && bombs().every(b => b.defused);
+  if ((MS.timerKind === 'bomb' && !allDefused) || MS.timerKind === 'deadline' || MS.timerKind === 'survive') MS.timer = Math.max(0, MS.timer - dt);
+  if (G.defusing && MS.curBomb && P.pos.distanceTo(MS.curBomb.pos) > 2.3) closeDefuse();
+  for (const b of bombs()) { if (b.disp) b.disp.material.color.set(b.defused ? '#30ff60' : ((G.time % 1) < 0.5 ? '#ff3020' : '#550a05')); if (!b.defused && P.pos.distanceTo(b.pos) < 6) { b.beepT = (b.beepT || 0) - dt; if (b.beepT <= 0) { b.beepT = MS.timer < 60 ? 0.35 : 1; A.beep(); } } }
+  const fighting = G.enemies.some(e => e.alive && e.state === 'combat'); A.setTension(fighting ? 1 : MS.alarm ? 0.6 : 0.15);
+  percT -= dt; if (percT <= 0) { percT = 0.2; const cam = G.camera; const fwd = new THREE.Vector3(); cam.getWorldDirection(fwd);
+    for (const e of G.enemies) { if (!e.alive) continue; const hp = V3(e.pos.x, e.pos.y + 1.5, e.pos.z); const to = hp.clone().sub(cam.position); const d = to.length(); to.normalize(); if (to.dot(fwd) > 0.45 && d < 40 && los(cam.position, hp)) e.spottedT = G.time; } }
+  MS.revealT = Math.max(0, (MS.revealT || 0) - dt);
+  if (has('survive')) { const o = LV.objectives.find(o => o.type === 'survive'); MS.surviveT = (o.s || MS.tlim) - MS.timer; }
+  G.missionTimer = MS.timer;
+}
+const remoteUp = () => G.team.some(t => t.remote && t.alive && t.state !== 'downed');
 export function updateMission(dt) {
+  if (MS.netClient) { clientUpdate(dt); return; }
   if (MS.ended) { MS.endT += dt; return; }
   // timer
   const allDefused = bombs().length > 0 && bombs().every(b => b.defused);
@@ -238,9 +262,10 @@ export function updateMission(dt) {
   if (has('survive')) { const o = LV.objectives.find(o => o.type === 'survive'); MS.surviveT += dt; if (MS.timerKind !== 'survive') MS.timer = Math.max(0, (o.s || MS.tlim) - MS.surviveT); }
   G.missionTimer = MS.timer;
   // objectives
-  const st = objectiveState(); if (st.req.every(o => o.done) && P.alive) success();
+  const st = objectiveState(); if (st.req.every(o => o.done) && (P.alive || remoteUp())) success();
 }
-function inZone(z) { return z && P.pos.x > z.x1 && P.pos.x < z.x2 && P.pos.z > z.z1 && P.pos.z < z.z2; }
+const inBox = (p, z) => p.x > z.x1 && p.x < z.x2 && p.z > z.z1 && p.z < z.z2;
+function inZone(z) { return !!z && ((P.alive && inBox(P.pos, z)) || G.team.some(t => t.remote && t.state !== 'downed' && inBox(t.pos, z))); }
 export function objectiveState() {
   const list = [], s = G.stats || {}; const hostile = G.enemies.filter(e => e.isHostile()).length; const total = G.enemies.length;
   const hs = G.hostages.filter(h => !h.pilot); const restrained = hs.filter(h => h.alive && (h.state === 'restrained' || h.state === 'shield')).length;
@@ -282,18 +307,22 @@ function score(successful) {
   return { rows, total, stars, grade, acc, time: G.time - s.start };
 }
 export function fmt(sec) { sec = Math.max(0, Math.ceil(sec)); return `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`; }
+export function netEnd(ok, reason, sub) { MS.hostEnd = true; if (ok) success(); else fail(reason, sub); }
+export function failMission(title, sub) { fail(title, sub); }
 function success() {
-  if (MS.ended) return; MS.ended = true; A.alarm(false); radio('RAFI', LV.winLine ? LV.winLine[0] : 'Area secure. Mission accomplished. Tiger 24, outstanding work.', LV.winLine ? LV.winLine[1] : 'Rafi: Area secure. Mission complete. Tiger 24, darun kaj!', { prio: true });
+  if (MS.ended || (MS.netClient && !MS.hostEnd)) return; MS.ended = true; A.alarm(false); radio('RAFI', LV.winLine ? LV.winLine[0] : 'Area secure. Mission accomplished. Tiger 24, outstanding work.', LV.winLine ? LV.winLine[1] : 'Rafi: Area secure. Mission complete. Tiger 24, darun kaj!', { prio: true });
   G.hooks.banner && G.hooks.banner('MISSION COMPLETE', CUR.meta.name);
   const sc = score(true); const id = CUR.meta.id; const rec = PROFILE.missions[id] || {}; const isBest = !rec.best || sc.total > rec.best;
   const xp = Math.round(sc.total / 4) + 150; PROFILE.xp += xp;
   PROFILE.missions[id] = { done: true, stars: Math.max(rec.stars || 0, sc.stars), best: Math.max(rec.best || 0, sc.total), grade: isBest ? sc.grade : rec.grade }; saveProfile();
   MS.result = { ok: true, title: 'Mission complete', sub: CUR.meta.name + ' · ' + G.diff, ...sc, best: Math.max(rec.best || 0, sc.total), isBest, xp };
+  G.hooks.netEndHost && G.hooks.netEndHost(true);
   later(() => G.hooks.debrief && G.hooks.debrief(MS.result), 3500);
 }
 function fail(title, sub) {
-  if (MS.result) return; MS.ended = true; A.alarm(false);
+  if (MS.result || (MS.netClient && !MS.hostEnd)) return; MS.ended = true; A.alarm(false);
   const sc = score(false); const xp = 40; PROFILE.xp += xp; saveProfile();
   MS.result = { ok: false, title: 'Mission failed', reason: title, sub, ...sc, best: (PROFILE.missions[CUR.meta.id] || {}).best || 0, xp };
+  G.hooks.netEndHost && G.hooks.netEndHost(false, title, sub);
   later(() => G.hooks.debrief && G.hooks.debrief(MS.result), 600);
 }

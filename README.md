@@ -1,6 +1,6 @@
 # Tiger 24
 
-A browser-based 3D tactical shooter. You play as Shadow, an operator in the counter-terror unit Tiger 24, across a 12-mission campaign: hostage rescue, hijackings, bomb defusal, stealth, survival and arrests.
+A browser-based 3D tactical shooter. You play as Shadow, an operator in the counter-terror unit Tiger 24, across a 16-mission campaign: hostage rescue, hijackings, bomb defusal, stealth, survival and arrests. Up to 4 friends can play the campaign together in online co-op.
 
 Built with plain JavaScript ES modules, [Three.js](https://threejs.org) 0.165 for rendering and [cannon-es](https://github.com/pmndrs/cannon-es) 0.20 for physics. There is no build step: the libraries load from a CDN through an import map.
 
@@ -55,6 +55,31 @@ Touch controls appear on phones and tablets.
 | 10 | Black Tide | Oil rig in a storm: close three gas valves, evacuate the crew |
 | 11 | Undercity | Metro station chemical bomb |
 | 12 | Red Tide | Harbour at night: arrest the arms dealer and take his ledger |
+| 13 | Lifeline | Hospital in a power cut: restart the generator, free the patients and the minister |
+| 14 | Whiteout | Snowbound radar outpost: steal the launch codes, kill the jammer, fly out |
+| 15 | Bazaar | Shopping mall siege: two bombs and ten hostages |
+| 16 | Floodgate | Finale at the dam: three charges, arrest the Red Tide chief, save the engineers |
+
+## Co-op multiplayer
+
+Choose **Multiplayer** from the lobby menu. One player picks a mission and difficulty and presses **Host game**. That player gets a 4-character code, and the others join with it, or pick the game from the open-games list. In co-op the AI squad is replaced by the human players.
+
+How it works:
+
+- **Host-authoritative.** The host's browser runs every enemy, hostage and objective. The other players run the same level with the enemies and hostages as puppets driven by the host's world snapshot, sent 10 times a second.
+- **Client actions.** Each player hits enemies on their own screen, then sends the hit to the host along with actions such as freeing a hostage, arresting, opening a door, cutting a wire, throwing a flashbang or smoke, and using a task console.
+- **Downed players.** A player who goes down can be revived by a teammate holding F nearby. Otherwise they respawn at the entry point after 25 seconds. The mission fails only if everyone is down at once.
+
+Transport:
+
+- **On claude.ai:** the game uses the artifact's `room` capability, so there's no server to run. Everyone who opens the shared artifact page is in the same room.
+- **Self-hosted:** run the relay in `server/` and point every player at it:
+
+```bash
+cd server && npm install && node relay.mjs
+```
+
+Then open `game/?relay=ws://<relay-host>:8787` on each player's browser, or enter the relay address on the Multiplayer screen.
 
 ## Code layout
 
@@ -68,9 +93,11 @@ game/
   src/player.js       Movement, weapons, gadgets, interaction
   src/ai.js           Enemies, hostages, squad AI, ragdolls
   src/mission.js      Generic mission engine: objectives, scoring, progression
+  src/net.js          Co-op multiplayer: transport, host/client sync, remote players
   src/hud.js          HUD and minimap
   src/lobby.js        3D hangar lobby and mission art
   src/missions/       One module per mission; index.js sets the campaign order
+server/relay.mjs      WebSocket presence relay for co-op outside claude.ai
 prototypes/           Early element preview, lobby mock-up and the first single-mission build
 ```
 

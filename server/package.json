@@ -1,0 +1,10 @@
+{
+  "name": "tiger24-relay",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Presence relay for Tiger 24 co-op multiplayer outside claude.ai",
+  "type": "module",
+  "main": "relay.mjs",
+  "scripts": { "start": "node relay.mjs" },
+  "dependencies": { "ws": "^8.18.0" }
+}

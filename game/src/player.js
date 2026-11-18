@@ -225,7 +225,7 @@ function doInteract(t) {
   else if (t.kind === 'door') { t.door.toggle(P.pos, 'player'); if (t.door.locked) G.hooks.lockedDoor && G.hooks.lockedDoor(t.door); }
   else if (t.kind === 'pickup') { const it = t.it;
     if (it.kind === 'ammo') { P.ammo.rifle.res = Math.max(P.ammo.rifle.res, WEAPONS.rifle.res); P.ammo.pistol.res = Math.max(P.ammo.pistol.res, WEAPONS.pistol.res); if ((LOADOUT.gadgets || []).includes('flash')) P.flash = Math.max(P.flash, 2); if ((LOADOUT.gadgets || []).includes('smoke')) P.smoke = Math.max(P.smoke, 2); A.pickup(); G.hooks.toast && G.hooks.toast('Ammo ar flashbang refill hoyeche'); return; }
-    if (it.kind === 'medkit') { if (P.med >= 2 && P.hp >= 100) { G.hooks.toast && G.hooks.toast('Medkit full'); return; } it.used = true; it.obj.visible = false; P.med = Math.min(2, P.med + 1); A.pickup(); G.hooks.toast && G.hooks.toast('Medkit +1 (H chaple use)'); }
+    if (it.kind === 'medkit') { if (P.med >= 2 && P.hp >= 100) { G.hooks.toast && G.hooks.toast('Medkit full'); return; } it.used = true; it.obj.visible = false; G.hooks.pickupShared && G.hooks.pickupShared(it); P.med = Math.min(2, P.med + 1); A.pickup(); G.hooks.toast && G.hooks.toast('Medkit +1 (H chaple use)'); }
     if (it.kind === 'intel') { it.used = true; it.obj.visible = false; A.pickup(); G.hooks.intel && G.hooks.intel(); } }
   else if (t.kind === 'console') { t.it.used = true; G.hooks.console && G.hooks.console(t.it); }
   else if (t.kind === 'bomb') { G.hooks.bomb && G.hooks.bomb(t.it); }
@@ -250,14 +250,18 @@ function updateNades(dt) {
     if (n.t <= 0) { const p = n.m.position.clone(); G.scene.remove(n.m); G.world.removeBody(n.b); nades.splice(i, 1); if (n.kind === 'smoke') { G.hooks.smoke && G.hooks.smoke(p); } else detonateFlash(p); } }
 }
 function detonateFlash(p) {
+  flashEffects(p);
+  G.hooks.flashbang && G.hooks.flashbang(p);
+  G.stats.flashes++;
+}
+// sound, light and blinding of a flashbang going off at p (also used for flashbangs thrown by other co-op players)
+export function flashEffects(p) {
   A.bang(p); FX.light(p, '#ffffff', 220, 0.35, 22); FX.emit(p, V3(0, 1, 0), 60, '#ffffff', 5, 0.4, 2); FX.puff(p, { count: 6, size: 0.6, life: 2.5, rise: 0.25, color: '#d8d8d8', spread: 0.5 });
   emitNoise(p, 40, 'explosion');
   // player blinding
   const eye = G.camera.position; const d = eye.distanceTo(p);
   if (d < 14 && rayClear(eye, p)) { const dir = new THREE.Vector3(); G.camera.getWorldDirection(dir); const to = p.clone().sub(eye).normalize(); const dot = dir.dot(to);
     const k = clamp((1 - d / 14) * (dot > 0.2 ? 1 : 0.35), 0, 1); if (k > 0.05) { P.flashBlind = Math.max(P.flashBlind, 1 + k * 3.5); A.tinnitus(1 + k * 4); } }
-  G.hooks.flashbang && G.hooks.flashbang(p);
-  G.stats.flashes++;
 }
 function rayClear(a, b) { const d = b.clone().sub(a); const L = d.length(); d.normalize(); const h = rayWorld(a, d, L - 0.1, c => !!c.glass); return !h; }
 
@@ -374,7 +378,7 @@ function shoot(W, am, crouch) {
   P.bloom = Math.min(0.06, P.bloom + 0.007);
   const k = W.recoil * (P.adsT > 0.6 ? 0.65 : 1) * (crouch ? 0.8 : 1);
   P.pitch += k * (0.8 + R() * 0.4); P.yaw += (R() - 0.45) * k * 0.6; P.recoilP += k * 1.4; P.kickT = 1; P.shake = Math.max(P.shake, 0.05 * W.kick);
-  A.shot(W.sound); emitNoise(P.pos, W.noise, 'gunshot', 'player');
+  A.shot(W.sound); emitNoise(P.pos, W.noise, 'gunshot', 'player'); G.hooks.shotFired && G.hooks.shotFired(dir);
   VM.flashT = 0.045; G.vmFlash.intensity = 4;
   if (!W.suppressed) FX.light(G.camera.position.clone().addScaledVector(dir, 0.8), '#ffb35a', 4, 0.06, 6);
   const wpos = G.camera.localToWorld(V3(0.12, -0.12, -0.3)); const rdir = V3(1, 0.3, 0).applyQuaternion(G.camera.quaternion); FX.casing(wpos, rdir, P.pos.y);
