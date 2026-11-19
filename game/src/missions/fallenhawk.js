@@ -40,7 +40,7 @@ export function build() {
   let smokeT = 0;
   return {
     id: 'fallenhawk', bounds: { x0: -38, z0: -38, x1: 38, z1: 38 },
-    spawns: { crash: { pos: V3(3.6, 0, 1.2), yaw: -PI / 2, label: 'Crash site', desc: 'Wreck er pashei apni. Pilot pashe pore ache. Cover nin, enemy ashche.', risk: 'Risk: Extreme' } },
+    spawns: { crash: { insert: 'fade', pos: V3(3.6, 0, 1.2), yaw: -PI / 2, label: 'Crash site', desc: 'Wreck er pashei apni. Pilot pashe pore ache. Cover nin, enemy ashche.', risk: 'Risk: Extreme' } },
     enemies: [], hostages: [{ pos: V3(2.2, 0, -0.6), yaw: PI / 2, pilot: true, name: 'Pilot Arif', hp: 260, look: { shirt: '#5a6040', trousers: '#4a4a3a', skin: '#a87652', seed: 50 } }],
     exits: [], rescued: () => false,
     objectives: [{ type: 'survive', label: 'Rescue heli asha porjonto tike thako' }, { type: 'protect', label: 'Pilot Arif ke rokkha koro' }], bonus: [],

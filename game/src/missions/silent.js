@@ -57,8 +57,8 @@ export function build() {
   cams.forEach(c => c.yaw = K.camLook(c.pos, c.at)); K.buildCameras(cams);
   return {
     id: 'silent', bounds: { x0: -31, z0: -31, x1: 31, z1: 31 },
-    spawns: { wall: { pos: V3(-27, 0, 27), yaw: -PI / 4, label: 'Compound wall', desc: 'Uttor-poshchim kone deyal tope dhukben. Pashchimer side door diye office.', risk: 'Risk: Low · Stealth' },
-      gate: { pos: V3(24, 0, 28.6), yaw: PI * 0.9, label: 'Service gate', desc: 'Guard house er pasher service gate. Guard ke chupchap shamlate hobe.', risk: 'Risk: Medium' } },
+    spawns: { wall: { insert: 'fade', pos: V3(-27, 0, 27), yaw: -PI / 4, label: 'Compound wall', desc: 'Uttor-poshchim kone deyal tope dhukben. Pashchimer side door diye office.', risk: 'Risk: Low · Stealth' },
+      gate: { insert: 'fade', pos: V3(24, 0, 28.6), yaw: PI * 0.9, label: 'Service gate', desc: 'Guard house er pasher service gate. Guard ke chupchap shamlate hobe.', risk: 'Risk: Medium' } },
     enemies: [
       { id: 'E1', pos: V3(27.8, 0, 25), yaw: PI, room: 'Compound' }, { id: 'E2', pos: V3(0, 0, 10), yaw: 0, room: 'Compound', patrol: [V3(-14, 0, 4), V3(14, 0, 4), V3(14, 0, 16), V3(-14, 0, 16)] },
       { id: 'E3', pos: V3(-20, 0, -14), yaw: PI / 2, room: 'Compound', patrol: [V3(-20, 0, -26), V3(-20, 0, 14)] }, { id: 'E4', pos: V3(20, 0, -12), yaw: -PI / 2, room: 'Compound', patrol: [V3(20, 0, -26), V3(20, 0, 12)] },

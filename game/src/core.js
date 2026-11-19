@@ -38,7 +38,14 @@ export const G = {
 window.__T24 = G;
 
 /* ---------- material & geometry helpers ---------- */
-const matCache = new Map();
+const matCache = new Map(); let matGen = 0;
+// materials made while a level is loaded belong to that level and are dropped when it unloads
+export function setAssetGen(g) { matGen = g; }
+export function purgeAssets(gen) {
+  for (const [k, m] of matCache) if (m.userData.gen === gen && gen !== 0) { disposeMat(m); matCache.delete(k); }
+  for (const [k, m] of _rimCache) { m.dispose(); _rimCache.delete(k); }
+}
+export function disposeMat(m) { if (!m) return; for (const key of ['map', 'normalMap', 'roughnessMap', 'emissiveMap', 'alphaMap']) if (m[key] && m[key].dispose) m[key].dispose(); m.dispose(); }
 export function M(color, rough = 0.8, metal = 0, extra = null) {
   let key = null;
   if (!extra || Object.values(extra).every(v => typeof v !== 'object' || (v && v.isTexture))) {
@@ -48,7 +55,7 @@ export function M(color, rough = 0.8, metal = 0, extra = null) {
   const ex = Object.assign({}, extra || {}); const ns = ex.normal; delete ex.normal;
   if (ex.map && ex.map.userData && ex.map.userData.canvas && !ex.normalMap && ns !== false) { const pm = pbrMaps(ex.map); ex.normalMap = pm.normal; ex.roughnessMap = pm.rough; const k = typeof ns === 'number' ? ns : 0.9; ex.normalScale = new THREE.Vector2(k, k); }
   const m = new THREE.MeshStandardMaterial(Object.assign({ color, roughness: rough, metalness: metal }, ex));
-  if (key) matCache.set(key, m);
+  m.userData.gen = matGen; if (key) matCache.set(key, m);
   return m;
 }
 /* derive a tileable normal map + roughness variation from a canvas texture's luminance (sobel) */
@@ -152,7 +159,7 @@ export function initGraphics(host) {
   G.ao = new GTAOPass(scene, G.camera, 512, 512); G.ao.blendIntensity = 0.85;
   G.ao.updateGtaoMaterial({ radius: 0.55, distanceExponent: 1.4, thickness: 1.2, scale: 1.15, samples: 12, distanceFallOff: 1 }); G.ao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 12 });
   G.composer.addPass(G.ao);
-  const vm = new RenderPass(G.vmScene, G.vmCamera); vm.clear = false; vm.clearDepth = true; G.composer.addPass(vm);
+  const vm = G.vmPass = new RenderPass(G.vmScene, G.vmCamera); vm.clear = false; vm.clearDepth = true; G.composer.addPass(vm);
   G.bloom = new UnrealBloomPass(new THREE.Vector2(512, 512), 0.4, 0.5, 0.86); G.composer.addPass(G.bloom);
   G.composer.addPass(new OutputPass());
   G.grade = new ShaderPass(GradeShader); G.composer.addPass(G.grade);

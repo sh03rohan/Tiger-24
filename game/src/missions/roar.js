@@ -69,7 +69,7 @@ export function build() {
   return {
     id: 'roar', bounds: { x0: -34, z0: -32, x1: 34, z1: 30 },
     spawns: { gate: { pos: V3(0, 0, 21), yaw: 0, label: 'Main gate', desc: 'Shoja main gate diye courtyard e. Shobcheye beshi enemy, shobcheye druto.', risk: 'Risk: Extreme' },
-      cliff: { pos: V3(30, 0, -22.5), yaw: PI / 2, label: 'Cliff path', desc: 'Paharer pichoner rasta diye purbo deyaler fatol. Armory er pashe.', risk: 'Risk: High · Flank' } },
+      cliff: { insert: 'fade', pos: V3(30, 0, -22.5), yaw: PI / 2, label: 'Cliff path', desc: 'Paharer pichoner rasta diye purbo deyaler fatol. Armory er pashe.', risk: 'Risk: High · Flank' } },
     enemies: [
       { id: 'E1', pos: V3(-2.4, 0, 10.6), yaw: 0, room: 'Courtyard' }, { id: 'E2', pos: V3(2.4, 0, 10.6), yaw: 0, room: 'Courtyard', heavy: true },
       { id: 'E3', pos: V3(-10, 0, 2), yaw: 0, room: 'Courtyard', patrol: [V3(-20, 0, 4), V3(-4, 0, 4), V3(-4, 0, -6), V3(-20, 0, -6)] }, { id: 'E4', pos: V3(10, 0, 0), yaw: 0, room: 'Courtyard', patrol: [V3(20, 0, -6), V3(4, 0, -6), V3(4, 0, 6), V3(20, 0, 6)] },

@@ -375,6 +375,8 @@ function shoot(W, am, crouch) {
     if (res.kind === 'agent') { hitAny = res.agent; if (res.part === 'head') head = true; } }
   if (W.taser) FX.tracer(G.camera.position.clone().add(V3(0, -0.15, 0)), G.camera.position.clone().addScaledVector(dir, 8), '#7fd8ff');
   if (hitAny) { G.stats.hits++; if (head) G.stats.headshots++; G.hooks.hitmark && G.hooks.hitmark(hitAny); }
+  // near misses: rounds snapping past an enemy's head make him duck (suppression) and wake him up
+  for (const e of G.enemies) { if (!e.alive || e === hitAny || !e.isHostile || !e.isHostile()) continue; const c = e.chestPos; const v = c.clone().sub(G.camera.position); const t = v.dot(dir); if (t < 1 || t > 45) continue; if (v.addScaledVector(dir, -t).length() < 1.4) { e.suppressT = Math.max(e.suppressT || 0, 1.8); if (e.state === 'idle' || e.state === 'patrol' || e.state === 'suspicious') e.investigate && e.investigate(P.pos.clone().add(V3(rr(-4, 4), 0, rr(-4, 4))), true); } }
   P.bloom = Math.min(0.06, P.bloom + 0.007);
   const k = W.recoil * (P.adsT > 0.6 ? 0.65 : 1) * (crouch ? 0.8 : 1);
   P.pitch += k * (0.8 + R() * 0.4); P.yaw += (R() - 0.45) * k * 0.6; P.recoilP += k * 1.4; P.kickT = 1; P.shake = Math.max(P.shake, 0.05 * W.kick);

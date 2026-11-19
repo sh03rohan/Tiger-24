@@ -60,6 +60,19 @@ Touch controls appear on phones and tablets.
 | 15 | Bazaar | Shopping mall siege: two bombs and ten hostages |
 | 16 | Floodgate | Finale at the dam: three charges, arrest the Red Tide chief, save the engineers |
 
+## How the fights work
+
+- **Awareness:** enemies see clearly inside about 120° in front of them, notice movement at the edges slowly, and don't see behind them. Light, crouching and distance all matter. Gunshots, breaches and breaking glass make them investigate the area, not your exact position.
+- **Alarms:** an alarm or a CCTV sighting sends only the nearest few enemies to search around where you were. The rest hold their posts on alert.
+- **Cover:** in a firefight each enemy picks cover between himself and you:
+  - Behind a crate, desk or rail he crouches, then stands up to shoot.
+  - At a wall or pillar he steps out from the corner to shoot.
+  - He hides again, reloads behind cover and changes position when you flank him.
+  - In groups some of them flank.
+  - Rounds snapping past an enemy suppress him, so he stays down longer.
+- **Insertion:** each mission opens with a short insertion. You arrive by helicopter, van or speedboat, rope down from a hovering helicopter, or get a title card for indoor and stealth entries. Any key, click or tap skips it.
+- **Mission size:** missions add extra patrolling guards on top of the scripted ones (+25 % on Recruit, +40 % on Veteran, +50 % on Elite) and give 25 % more time.
+
 ## Co-op multiplayer
 
 Choose **Multiplayer** from the lobby menu. One player picks a mission and difficulty and presses **Host game**. That player gets a 4-character code, and the others join with it, or pick the game from the open-games list. In co-op the AI squad is replaced by the human players.
@@ -114,6 +127,7 @@ game/
   src/ai.js           Enemies, hostages, squad AI, ragdolls
   src/mission.js      Generic mission engine: objectives, scoring, progression
   src/net.js          Co-op multiplayer: transport, host/client sync, remote players
+  src/insert.js       Insertion cinematics (helicopter, van, boat, title card)
   src/hud.js          HUD and minimap
   src/lobby.js        3D hangar lobby and mission art
   src/missions/       One module per mission; index.js sets the campaign order

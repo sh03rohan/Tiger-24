@@ -1,6 +1,6 @@
 // Tiger 24 — generic mission engine: objectives, alarm, CCTV, executions, bombs, waves, squad commands, scoring, progression
-import { THREE, G, PI, clamp, R, rr, A, FX, VO, emitNoise, store, V3, M, B } from './core.js';
-import { LV, lights, los, rayWorld, doors, interactables, roomAt, shatterGlass, buildNav, smokes, LG } from './levelkit.js';
+import { THREE, G, PI, clamp, R, rr, A, FX, VO, emitNoise, store, V3, M, B, rng } from './core.js';
+import { LV, lights, los, rayWorld, doors, interactables, roomAt, shatterGlass, buildNav, buildCover, smokes, LG, walkable } from './levelkit.js';
 import { P, resetPlayer, damagePlayer, clearNades, WEAPONS } from './player.js';
 import { spawnAll, clearAgents, stunArea, D, spawnWaveEnemy } from './ai.js';
 import { MISSIONS } from './missions/index.js';
@@ -29,10 +29,11 @@ export function startMission(id, entry, diff, squad) {
   GEN++; const mod = MISSIONS.find(m => m.meta.id === id) || MISSIONS[0]; CUR = mod;
   G.missionId = mod.meta.id; G.entry = entry; G.diff = diff; G.squad = squad; VO.stop();
   clearAgents(); clearNades(); FX.clear();
-  const def = mod.build(); Object.assign(LV, def); buildNav(def.bounds);
+  const def = mod.build(); Object.assign(LV, def); buildNav(def.bounds); buildCover();
   if (!LV.spawns[entry]) entry = G.entry = Object.keys(LV.spawns)[0];
+  addPatrols(LV, diff, entry);
   G.weaponsFree = false; G.playerTarget = null; G.defusing = false;
-  const t = LV.timer || { kind: 'none' }; const secs = typeof t.s === 'object' ? t.s[diff] : (t.s || 0);
+  const t = LV.timer || { kind: 'none' }; const secs = Math.round((typeof t.s === 'object' ? t.s[diff] : (t.s || 0)) * (t.kind === 'survive' ? 1 : 1.25)); // bigger missions get more time
   for (const k of Object.keys(MS)) delete MS[k];
   Object.assign(MS, { timer: secs, tlim: secs, timerKind: t.kind, alarm: false, alarmT: 0, nextExec: { recruit: 70, veteran: 45, elite: 30 }[diff], execInterval: { recruit: 50, veteran: 35, elite: 25 }[diff], execWarned: false,
     hawkCd: 0, wrong: 0, intel: false, cctvOff: false, revealT: 0, ended: false, endT: 0, result: null, toastCd: {}, camExpo: lights.cams.map(() => 0), combatT: 0, hawkPending: null,
@@ -44,6 +45,26 @@ export function startMission(id, entry, diff, squad) {
   if (has('stealth')) { for (const t of G.team) { t.order = 'hold'; t.state = 'hold'; t.holdPos = t.pos.clone(); } later(() => toast('Stealth: team spawn e hold korche · X chaple follow'), 2500); }
   G.hooks.levelReady && G.hooks.levelReady();
   intro(entry);
+}
+/* bigger missions: extra guards patrol the enemy-held areas. Placement is seeded by the mission id so every co-op player builds the same list. */
+function addPatrols(L, diff, entry) {
+  const base = L.enemies || []; if (!base.length) return;
+  const stealth = (L.objectives || []).some(o => o.type === 'stealth');
+  const n = Math.round(base.length * (stealth ? 0.25 : { recruit: 0.25, veteran: 0.4, elite: 0.5 }[diff] || 0.4));
+  let h = 7; for (const ch of (L.id || 'x') + entry) h = (h * 31 + ch.charCodeAt(0)) >>> 0; const r = rng(h);
+  const B = L.bounds, spawns = [L.spawns[entry] ? L.spawns[entry].pos : Object.values(L.spawns)[0].pos], occupied = [...base.map(e => e.pos), ...(L.hostages || []).map(h => h.pos)];
+  const held = new Set(base.map(e => roomAt(e.pos.x, e.pos.z)));
+  const extra = []; let tries = 0;
+  while (extra.length < n && tries++ < 500) {
+    const x = B.x0 + r() * (B.x1 - B.x0), z = B.z0 + r() * (B.z1 - B.z0); if (!walkable(x, z, { locked: true })) continue; const p = V3(x, 0, z);
+    if (spawns.some(s => s.distanceTo(p) < 16) || occupied.some(o => o.distanceTo(p) < 3.5)) continue;
+    if (spawns.some(s => s.distanceTo(p) < 35 && los(V3(s.x, 1.6, s.z), V3(x, 1.3, z)))) continue; // never in plain view of the entry
+    const rm = roomAt(x, z); if (!held.has(rm)) continue;
+    let q = null; for (let k = 0; k < 10 && !q; k++) { const a = r() * PI * 2, d = 5 + r() * 9, qx = x + Math.cos(a) * d, qz = z + Math.sin(a) * d; const qq = V3(qx, 0, qz);
+      if (walkable(qx, qz, { locked: true }) && roomAt(qx, qz) === rm && !spawns.some(s => s.distanceTo(qq) < 14)) { let ok = true; for (let t = 0.5; t < d && ok; t += 0.5) ok = walkable(x + Math.cos(a) * t, z + Math.sin(a) * t, { locked: true }); if (ok) q = qq; } } // straight, open patrol leg (cheap check)
+    extra.push({ id: 'X' + extra.length, pos: p, yaw: r() * PI * 2, room: rm.name, patrol: q ? [p.clone(), q] : null, heavy: r() < 0.15 }); occupied.push(p);
+  }
+  L.enemies = [...base, ...extra]; L.extraGuards = extra.length;
 }
 function intro(entry) {
   const line = (LV.intro && (LV.intro[entry] || LV.intro.all)) || ['Tiger 24, go.', 'Rafi: Tiger 24, shuru koro.'];
@@ -57,7 +78,8 @@ export function triggerAlarm(reason) {
   if (has('stealth')) { G.hooks.banner && G.hooks.banner('DETECTED', reason || ''); radio('RAFI', 'We are compromised! Mission failed.', 'Rafi: Dhora pore gechi! Mission fail.', { prio: true }); later(() => fail('Dhora pore gechen', 'Stealth mission e alarm baje geche.'), 1800); return; }
   radio('RAFI', LV.executions ? 'Alarm is up! They will start killing hostages, move fast!' : 'Alarm is up! They know we are here!', LV.executions ? 'Rafi: Alarm baje gese! Ora hostage marte shuru korbe, taratari!' : 'Rafi: Alarm baje gese! Ora jene gese!', { prio: true });
   G.hooks.banner && G.hooks.banner('ALARM', reason || 'Enemy alert');
-  for (const e of G.enemies) if (e.isHostile() && e.state !== 'combat' && e.state !== 'shield') { e.alerted = true; if (R() < 0.5) e.investigate(P.pos.clone(), true); }
+  // nobody knows exactly where we are: the closest few come looking around the area, the rest hold their posts on alert
+  for (const e of G.enemies) if (e.isHostile() && e.state !== 'combat' && e.state !== 'shield') { e.alerted = true; if (e.pos.distanceTo(P.pos) < 22 && R() < 0.55) e.investigate(P.pos.clone().add(V3(rr(-5, 5), 0, rr(-5, 5))), true); else if (e.state === 'idle' || e.state === 'patrol') e.waitT = 0; }
 }
 
 /* ================= hooks ================= */
@@ -224,7 +246,7 @@ export function updateMission(dt) {
     const seen = P.alive && d < 17 && to.dot(fw) > Math.cos(0.42) && los(cp, pp, false);
     MS.camExpo[i] = clamp(MS.camExpo[i] + (seen ? dt : -dt * 0.6), 0, camT);
     c.cone.material.opacity = 0.05 + (MS.camExpo[i] / camT) * 0.2; c.led.visible = seen ? (G.time % 0.2) < 0.1 : (G.time % 1.5) < 0.2;
-    if (MS.camExpo[i] >= camT) { triggerAlarm('CCTV camera spotted you'); for (const e of G.enemies) if (e.isHostile() && e.state !== 'combat') e.investigate(P.pos.clone(), true); MS.camExpo[i] = 0; }
+    if (MS.camExpo[i] >= camT) { triggerAlarm('CCTV camera spotted you'); G.enemies.filter(e => e.isHostile() && e.state !== 'combat' && e.pos.distanceTo(P.pos) < 30).sort((a, b) => a.pos.distanceTo(P.pos) - b.pos.distanceTo(P.pos)).slice(0, 3).forEach(e => e.investigate(P.pos.clone().add(V3(rr(-2, 2), 0, rr(-2, 2))), true)); MS.camExpo[i] = 0; }
   });
   // executions
   if (MS.alarm && LV.executions) {

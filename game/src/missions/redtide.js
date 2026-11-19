@@ -71,8 +71,8 @@ export function build() {
   K.buildCameras([{ pos: V3(-6.4, 4.4, -4.4), yaw: K.camLook(V3(-6.4, 0, -4.4), V3(4, 0, 8)), pitch: -0.3 }, { pos: V3(-6.4, 4.4, -21.6), yaw: K.camLook(V3(-6.4, 0, -21.6), V3(4, 0, -12)), pitch: -0.3 }]);
   return {
     id: 'redtide', bounds: { x0: -32.4, z0: -28.4, x1: 26.4, z1: 26.6 },
-    spawns: { gate: { pos: V3(7, 0, -26.6), yaw: PI, label: 'North gate', desc: 'Truck er pichone lukiye main gate diye. Container yard er moddhe diye warehouse.', risk: 'Risk: High' },
-      pier: { pos: V3(-6, 0, 24.6), yaw: 0, label: 'Speedboat', desc: 'Pani theke speedboat e eshe pier e namben. Warehouse er shamne khola jayga.', risk: 'Risk: Medium · Stealth', surprise: ['Docks'] } },
+    waterY: -1.4, spawns: { gate: { pos: V3(7, 0, -26.6), yaw: PI, label: 'North gate', desc: 'Truck er pichone lukiye main gate diye. Container yard er moddhe diye warehouse.', risk: 'Risk: High' },
+      pier: { insert: 'boat', pos: V3(-6, 0, 24.6), yaw: 0, label: 'Speedboat', desc: 'Pani theke speedboat e eshe pier e namben. Warehouse er shamne khola jayga.', risk: 'Risk: Medium · Stealth', surprise: ['Docks'] } },
     enemies: [
       { id: 'E1', pos: V3(6.4, 0, -23), yaw: PI, room: 'Docks' }, { id: 'E2', pos: V3(8.6, 0, -9), yaw: PI, room: 'Docks', patrol: [V3(8.6, 0, -24), V3(8.6, 0, 7)] },
       { id: 'E3', pos: V3(19, 0, -10.4), yaw: -PI / 2, room: 'Docks', heavy: true }, { id: 'E4', pos: V3(-2, 0, 0), yaw: PI / 2, room: 'Docks', patrol: [V3(-3, 0, -1), V3(-3, 0, 18), V3(-20, 0, 18), V3(-20, 0, -1)] },

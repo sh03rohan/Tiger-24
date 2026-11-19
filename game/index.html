@@ -515,6 +515,21 @@ td.pos{color:var(--ok)}td.neg{color:var(--hostile)}
 #rotateAll small{display:block;margin-top:10px;font:500 12px var(--f-mono);color:var(--muted)}
 @keyframes rot{0%,20%{transform:rotate(0)}50%,80%{transform:rotate(-90deg)}100%{transform:rotate(0)}}
 @media (orientation:portrait) and (pointer:coarse){ #rotateAll{display:grid} #rotate{display:none!important} }
+
+/* insertion cinematic */
+#cine{position:fixed;inset:0;z-index:13;pointer-events:auto;cursor:pointer;transition:opacity .6s}
+#cine.out{opacity:0;pointer-events:none}
+#cine .lb{position:absolute;left:0;right:0;height:11vh;background:#000}#cine .lb.t{top:0}#cine .lb.b{bottom:0}
+#cine.dark{background:radial-gradient(ellipse at 50% 60%,rgba(0,0,0,.35),rgba(0,0,0,.92))}
+#cine .cc{position:absolute;left:max(28px,env(safe-area-inset-left,0px));bottom:calc(11vh + 22px);display:grid;gap:6px;animation:cineIn 1.1s ease both .3s}
+#cineNo{font:600 12px/1 var(--f-mono);letter-spacing:.24em;color:var(--tiger)}
+#cineName{font:800 clamp(30px,5.4vw,58px)/.95 var(--f-display);letter-spacing:.05em;text-transform:uppercase;text-shadow:0 4px 30px rgba(0,0,0,.7)}
+#cineLoc{font:500 14px/1.3 var(--f-body);color:#d8ded8}
+#cineHow{font:600 11px/1 var(--f-mono);letter-spacing:.18em;color:var(--friend);text-transform:uppercase;margin-top:4px}
+#cine .skip{position:absolute;right:max(24px,env(safe-area-inset-right,0px));bottom:calc(11vh - 34px);font:600 11px/1 var(--f-mono);letter-spacing:.16em;color:rgba(255,255,255,.7);text-transform:uppercase}
+@keyframes cineIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+body.cine-on #hud,body.cine-on #touch{visibility:hidden}
+@media (orientation:landscape) and (max-height:520px){ #cine .lb{height:9vh} #cine .cc{bottom:calc(9vh + 12px)} #cineName{font-size:28px} #cineLoc{font-size:12px} #cine .skip{bottom:calc(9vh - 26px);font-size:10px} }
 </style>
 
 <div class="game">
@@ -671,6 +686,7 @@ td.pos{color:var(--ok)}td.neg{color:var(--hostile)}
   "cannon-es": "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js"
 } }
 </script>
+<div id="cine" hidden><div class="lb t"></div><div class="lb b"></div><div class="cc"><span id="cineNo"></span><b id="cineName"></b><span id="cineLoc"></span><span id="cineHow"></span></div><div class="skip">Tap / Space · skip</div></div>
 <div id="rotateAll" role="alert"><div><div class="ph" aria-hidden="true"></div>Phone ta <b>ghuriye</b> dhorun<br>Tiger 24 landscape e khela jay<small>Auto-rotate on rakhun</small></div></div>
 <script type="module" src="src/main.js"></script>
 <script>

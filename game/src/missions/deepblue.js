@@ -68,9 +68,9 @@ export function build() {
   const t0 = performance.now();
   return {
     id: 'deepblue', bounds: { x0: -10, z0: -42, x1: 10, z1: 34 },
-    spawns: { stern: { pos: V3(6.6, 0, -25.6), yaw: PI, label: 'Stern ladder', desc: 'Speedboat theke pichoner ladder diye uthben. Superstructure er pashe, bridge kache.', risk: 'Risk: High · Bridge e druto' },
-      bow: { pos: V3(-1.5, 0, 30.4), yaw: 0, label: 'Bow', desc: 'Shiper samner dik theke. Engine room kache, crew der agei pawa jabe.', risk: 'Risk: Medium' },
-      side: { pos: V3(-7.1, 0, -2.5), yaw: -PI / 2, label: 'Port side hook', desc: 'Majhkhane grappling hook diye uthben. Container er gali te lukano shohoj.', risk: 'Risk: Low · Stealth' } },
+    waterY: -3.2, spawns: { stern: { insert: 'boat', pos: V3(6.6, 0, -25.6), yaw: PI, label: 'Stern ladder', desc: 'Speedboat theke pichoner ladder diye uthben. Superstructure er pashe, bridge kache.', risk: 'Risk: High · Bridge e druto' },
+      bow: { insert: 'boat', pos: V3(-1.5, 0, 30.4), yaw: 0, label: 'Bow', desc: 'Shiper samner dik theke. Engine room kache, crew der agei pawa jabe.', risk: 'Risk: Medium' },
+      side: { insert: 'boat', pos: V3(-7.1, 0, -2.5), yaw: -PI / 2, label: 'Port side hook', desc: 'Majhkhane grappling hook diye uthben. Container er gali te lukano shohoj.', risk: 'Risk: Low · Stealth' } },
     enemies: [
       { id: 'E1', pos: V3(0, 0, -3), yaw: 0, room: 'Deck', patrol: [V3(0, 0, -24), V3(0, 0, 15)] }, { id: 'E2', pos: V3(-7.1, 0, -18), yaw: 0, room: 'Deck', patrol: [V3(-7.1, 0, -24), V3(-7.1, 0, 16)] },
       { id: 'E3', pos: V3(7.1, 0, 10), yaw: PI, room: 'Deck', patrol: [V3(7.1, 0, 16), V3(7.1, 0, -20)] }, { id: 'E4', pos: V3(2.6, 0, 4.5), yaw: -PI / 2, room: 'Deck' },

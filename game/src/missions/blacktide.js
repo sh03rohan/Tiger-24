@@ -78,9 +78,9 @@ export function build() {
   K.buildCameras([{ pos: V3(-8.3, 2.9, 4.3), yaw: K.camLook(V3(-8.3, 0, 4.3), V3(0, 0, -4)), pitch: -0.3 }]);
   return {
     id: 'blacktide', bounds: { x0: -23.2, z0: -19.2, x1: 23.2, z1: 19.2 },
-    spawns: {
+    waterY: -23.6, spawns: {
       heli: { pos: V3(16, 0, -12.5), yaw: PI / 2, rappel: 6, label: 'Helipad rappel', desc: 'Jhorer moddhe heli theke rope e helipad e namben. Shoja deck er majhe.', risk: 'Risk: High · Exposed' },
-      ladder: { pos: V3(-21.4, 0, -17.4), yaw: -PI / 2, label: 'Leg ladder', desc: 'Speedboat theke rig er paa beye uthben. Container er arale, chupchap.', risk: 'Risk: Medium · Stealth', surprise: ['Deck'] } },
+      ladder: { insert: 'boat', pos: V3(-21.4, 0, -17.4), yaw: -PI / 2, label: 'Leg ladder', desc: 'Speedboat theke rig er paa beye uthben. Container er arale, chupchap.', risk: 'Risk: Medium · Stealth', surprise: ['Deck'] } },
     enemies: [
       { id: 'E1', pos: V3(10, 0, -12), yaw: PI / 2, room: 'Deck', patrol: [V3(10, 0, -16.5), V3(10, 0, -7), V3(-2, 0, -7), V3(-2, 0, -16.5)] }, { id: 'E2', pos: V3(-6, 0, -6.5), yaw: 0, room: 'Deck' },
       { id: 'E3', pos: V3(0, 0, -4.4), yaw: PI, room: 'Drill floor', heavy: true }, { id: 'E4', pos: V3(4.2, 0, 4), yaw: 0, room: 'Deck', patrol: [V3(5, 0, 4), V3(5, 0, 17), V3(-6, 0, 17)] },

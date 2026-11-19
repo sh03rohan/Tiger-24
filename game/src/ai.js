@@ -1,7 +1,7 @@
 // Tiger 24 · Operation Vault — AI agents: enemies, hostages, teammates, ragdolls
 import { THREE, CANNON, G, PI, TAU, clamp, damp, angDiff, R, rr, A, FX, VO, NOISE, emitNoise, V3, rimify } from './core.js';
 import { makeEnemy, makeLeader, makeOperator, makeHostage, HOSTAGE_LOOKS, animate } from './assets.js';
-import { findPath, los, collideCircle, rayWorld, doorNear, doors, LV, roomAt, walkable, shatterGlass } from './levelkit.js';
+import { findPath, los, collideCircle, rayWorld, doorNear, doors, LV, roomAt, walkable, shatterGlass, findCover, coverProtects } from './levelkit.js';
 import { P, damagePlayer } from './player.js';
 
 const DIFF = {
@@ -112,7 +112,7 @@ export class Enemy extends Agent {
     this.state = this.patrol ? 'patrol' : 'idle'; this.lookBase = this.yaw;
   }
   targets() { const t = []; if (P.alive) t.push({ kind: 'player', pos: () => V3(P.pos.x, P.pos.y + P.height - 0.1, P.pos.z), feet: P.pos, ref: P }); for (const a of G.team) if (a.alive && a.state !== 'downed') t.push({ kind: 'team', pos: () => a.chestPos.add(V3(0, 0.3, 0)), feet: a.pos, ref: a }); for (const h of G.hostages) if (h.alive && h.targetable) t.push({ kind: 'team', pos: () => h.chestPos, feet: h.pos, ref: h }); return t; }
-  die(dir, point, part, shooter, force) { if (this.shieldHostage) { const h = this.shieldHostage; this.shieldHostage = null; if (h.alive) { h.noCollide = false; h.state = 'restrained'; h.free(true); } } super.die(dir, point, part, shooter, force); }
+  die(dir, point, part, shooter, force) { this.releaseCover && this.releaseCover(); if (this.shieldHostage) { const h = this.shieldHostage; this.shieldHostage = null; if (h.alive) { h.noCollide = false; h.state = 'restrained'; h.free(true); } } super.die(dir, point, part, shooter, force); }
   isHostile() { return this.alive && !['surrender', 'arrested', 'dead'].includes(this.state); }
   onHurt(amount, part, dir, shooter) {
     if (this.state === 'surrender' || this.state === 'arrested') { if (shooter === 'player') G.hooks.unauthorized && G.hooks.unauthorized(this); return; }
@@ -127,7 +127,7 @@ export class Enemy extends Agent {
     this.target = t; this.lastSeen = t.feet.clone(); this.state = 'combat'; this.lostT = 0; this.meter = 1;
     if (!wasCombat) { this.reactT = instant ? D().react * 0.6 : D().react + rr(0, 0.35) + this.surprised; this.seenT = 0; this.say(['Police! Police!', 'They are here!', 'Contact! Kill them!', 'Get them!'][Math.floor(R() * 4)], { cd: 4 }); this.alertOthers(t); G.hooks.enemyAlert && G.hooks.enemyAlert(this); }
   }
-  alertOthers(t) { for (const e of G.enemies) { if (e === this || !e.isHostile() || e.state === 'combat') continue; const d = e.pos.distanceTo(this.pos); if (d < 15 && (roomAt(e.pos.x, e.pos.z) === roomAt(this.pos.x, this.pos.z) || los(e.eye, this.eye))) e.investigate(t.feet.clone(), true); } }
+  alertOthers(t) { for (const e of G.enemies) { if (e === this || !e.isHostile() || e.state === 'combat') continue; const d = e.pos.distanceTo(this.pos); if (d < 15 && (roomAt(e.pos.x, e.pos.z) === roomAt(this.pos.x, this.pos.z) || los(e.eye, this.eye))) e.investigate(t.feet.clone().add(V3(rr(-3, 3), 0, rr(-3, 3))), true); } } // they hear the shout, not the exact spot
   investigate(p, alert = false) {
     if (!this.isHostile() || this.state === 'combat' || this.state === 'stunned' || this.state === 'shield' || this.state === 'grab') return;
     this.invPos = p.clone(); this.state = alert ? 'search' : 'suspicious'; this.invT = alert ? 16 : 8; this.alerted = this.alerted || alert; this.waitT = alert ? 0.4 : 1.2;
@@ -162,11 +162,13 @@ export class Enemy extends Agent {
     let bestT = null, bestF = 0;
     for (const t of this.targets()) {
       const tp = t.pos(); const fovCos = this.state === 'combat' || this.state === 'search' ? 0.1 : 0.5;
-      if (!this.canSeePoint(tp, fovCos, 34)) continue;
+      if (!this.canSeePoint(tp, Math.min(fovCos, 0.0), 34)) continue;
       const d = this.eye.distanceTo(tp);
+      // full attention inside ~120 degrees, slow peripheral pick-up out to the side, nothing behind
+      const fw = this.forward(), ex = tp.x - this.pos.x, ez = tp.z - this.pos.z, dd = Math.hypot(ex, ez) || 1, dot = (fw.x * ex + fw.z * ez) / dd; const periph = dot >= fovCos || dd < 2.2 ? 1 : 0.28;
       let f; if (t.kind === 'player') { const light = Math.pow(roomAt(P.pos.x, P.pos.z).light, 1.5); const stance = 1 - P.crouchT * 0.5; const mv = P.sprinting ? 1.5 : P.moving ? 1 : 0.5; f = clamp(1.25 - d / 26, 0.08, 1.25) * light * stance * mv * (d < 3 ? 3 : 1); }
       else { const a = t.ref; const light = Math.pow(roomAt(a.pos.x, a.pos.z).light, 1.5); f = clamp(1.25 - d / 26, 0.1, 1.25) * light * ((a.anim && a.anim._cr > 0.5) ? 0.5 : 1) * ((a.anim && a.anim.speed > 0.5) ? 1 : 0.55) * (d < 3 ? 3 : 1); }
-      if (f > bestF) { bestF = f; bestT = t; }
+      f *= periph; if (f > bestF) { bestF = f; bestT = t; }
     }
     if (this.state === 'combat') { if (bestT && (!this.target || bestT.ref === this.target.ref || !this.targetVisible)) { this.target = bestT; } this.targetVisible = !!bestT && bestT.ref === this.target.ref; if (this.targetVisible) { this.lastSeen = this.target.feet.clone(); this.lostT = 0; } return; }
     if (bestT) { const rate = { idle: 1, patrol: 1, suspicious: 1.6, search: 3, grab: 3 }[this.state] || 1; this.meter += bestF * D().detect * 2.1 * rate * step; this.meterTarget = bestT;
@@ -177,6 +179,7 @@ export class Enemy extends Agent {
   update(dt) {
     if (!this.alive) return; this.voiceCd -= dt; this.flinch = Math.max(0, (this.flinch || 0) - dt); this.suppressT = Math.max(0, this.suppressT - dt); this.anim.recoil = Math.max(0, (this.anim.recoil || 0) - dt * 8);
     this.surprised = Math.max(0, this.surprised - dt);
+    if (this.cov && this.state !== 'combat') this.releaseCover();
     const st = this.state;
     if (st !== 'surrender' && st !== 'arrested' && st !== 'stunned') { this.hear(); if (st !== 'shield') this.perceive(dt); }
     let speed = 0;
@@ -205,34 +208,65 @@ export class Enemy extends Agent {
     this.anim.crouch = this.wantCrouch ? 1 : 0;
     this.physicsStep(dt); animate(this.m, this.anim, dt);
   }
+  releaseCover() { if (this.cov && this.cov.claim === this) this.cov.claim = null; this.cov = null; this.cphase = null; }
   combat(dt) {
     const t = this.target; if (!t || (t.kind === 'player' && !P.alive) || (t.kind === 'team' && (!t.ref.alive || t.ref.state === 'downed'))) { const nt = this.targets()[0]; if (!nt) { this.state = 'search'; this.invPos = this.pos.clone(); this.invT = 10; return; } this.target = nt; }
     const tgt = this.target; const tp = tgt.pos(); const d = this.pos.distanceTo(tgt.feet); if (!this.lastSeen) this.lastSeen = tgt.feet.clone();
     if (!this.targetVisible) this.lostT += dt; this.seenT += dt;
-    this.anim.aim = 1; this.faceTo(this.targetVisible ? tgt.feet : this.lastSeen, dt, 7); const e = this.eye; this.anim.pitch = Math.atan2(tp.y - e.y, Math.max(0.5, d));
-    // reload
-    if (this.reloadT > 0) { this.reloadT -= dt; this.wantCrouch = this.nearCover(tgt); if (this.reloadT <= 0) this.mag = this.pistol ? 15 : 30; }
-    // movement
-    let moving = false;
-    if (this.targetVisible) {
-      if (d > 18) { this.goTo(tgt.feet); this.follow(dt, 2.2); moving = true; }
-      else if (d < 3.5) { const away = V3(this.pos.x - tgt.feet.x, 0, this.pos.z - tgt.feet.z).normalize(); const np = this.pos.clone().addScaledVector(away, 2); if (walkable(np.x, np.z)) { this.pos.addScaledVector(away, 1.6 * dt); moving = true; } }
-      else { this.strafeT -= dt; if (this.strafeT <= 0) { this.strafeT = rr(1.5, 3.5); const side = V3(Math.cos(this.yaw), 0, -Math.sin(this.yaw)).multiplyScalar(R() < 0.5 ? 1 : -1); this.strafeDir.copy(R() < 0.45 ? side : V3()); }
-        if (this.strafeDir.lengthSq() > 0) { const np = this.pos.clone().addScaledVector(this.strafeDir, 0.5); if (walkable(np.x, np.z)) { this.pos.addScaledVector(this.strafeDir, 1.4 * dt); moving = true; } else this.strafeDir.set(0, 0, 0); } }
-      this.anim.speed = damp(this.anim.speed, moving ? 1.6 : 0, 6, dt);
-      // cover peeking
-      const cover = this.nearCover(tgt); this.peekT -= dt; if (cover) { if (this.peekT <= 0) { this.peekT = rr(1.0, 2.2); this.peekUp = !this.peekUp; } this.wantCrouch = !this.peekUp || this.reloadT > 0; } else this.wantCrouch = false;
-    } else if (this.lostT > 1.2) {
-      this.wantCrouch = false; this.goTo(this.lastSeen); const done = this.follow(dt, 2.6);
-      if (done && this.lostT > 4) { this.state = 'search'; this.invPos = this.lastSeen.clone(); this.invT = 12; this.waitT = 0.5; this.say('Where did they go?', { cd: 6 }); }
+    this.anim.aim = 1; const e = this.eye; this.anim.pitch = Math.atan2(tp.y - e.y, Math.max(0.5, d));
+    if (this.reloadT > 0) { this.reloadT -= dt; if (this.reloadT <= 0) this.mag = this.pistol ? 15 : 30; }
+    // where the threat is (or was last seen)
+    const threat = this.targetVisible ? tp : V3(this.lastSeen.x, 1.35, this.lastSeen.z), threatFeet = this.targetVisible ? tgt.feet : this.lastSeen;
+    // keep, drop or find cover
+    this.coverT = (this.coverT || 0) - dt; this.coverSearchT = (this.coverSearchT || 0) - dt;
+    if (this.cov && this.coverT <= 0) { this.coverT = 0.9; if (!coverProtects(this.cov, threat) || this.pos.distanceTo(threatFeet) < 3 || (this.cphase === 'move' && !this.path && this.pos.distanceTo(this.cov.p) > 1)) { if (this.cphase === 'move' && !this.path) this.cov.bad = { ag: this, until: G.time + 8 }; this.releaseCover(); this.coverSearchT = 0; } }
+    if (!this.cov && this.coverSearchT <= 0) {
+      this.coverSearchT = 0.9 + R() * 0.6;
+      const mates = G.enemies.filter(o => o !== this && o.alive && o.state === 'combat').length; const flank = mates >= 2 && (this.anim.seed * 10 | 0) % 3 === 0;
+      const c = findCover(this, threat, threatFeet, { flank, advance: this.pushing });
+      if (c) { this.cov = c; c.claim = this; this.cphase = 'move'; this.moveFire = R() < 0.25; this.goTo(c.p); if (flank && R() < 0.5) this.say(['Flank him!', 'Moving left!', 'I will go around!'][Math.floor(R() * 3)], { cd: 6 }); }
+      this.pushing = false;
     }
-    // fire
+    let moving = false;
+    if (this.cov) {
+      const c = this.cov;
+      if (this.cphase === 'move') { this.wantCrouch = false; this.goTo(c.p); const done = this.follow(dt, 3.4); moving = true; if (done || this.pos.distanceTo(c.p) < 0.45) { this.cphase = 'hide'; this.phaseT = rr(0.4, 1.0); this.stop(); } }
+      else if (this.cphase === 'hide') {
+        this.wantCrouch = c.low; if (this.pos.distanceTo(c.p) > 0.35) { this.goTo(c.p); this.follow(dt, 2.4); moving = true; } else this.anim.speed = damp(this.anim.speed, 0, 8, dt);
+        this.phaseT -= dt; if (this.suppressT > 0) this.phaseT = Math.max(this.phaseT, 0.35);
+        if (this.mag < (this.pistol ? 6 : 12) && this.reloadT <= 0) { this.reloadT = 2.4; this.say(['Reloading!', 'Cover me, reloading!'][Math.floor(R() * 2)], { cd: 6 }); }
+        if (this.phaseT <= 0 && this.reloadT <= 0) { this.cphase = 'peek'; this.phaseT = rr(1.2, 2.5); }
+      } else if (this.cphase === 'peek') {
+        this.wantCrouch = false; const q = c.low ? c.p : c.pk; if (q && this.pos.distanceTo(q) > 0.3) { this.goTo(q); this.follow(dt, 2.2); moving = true; } else this.anim.speed = damp(this.anim.speed, 0, 8, dt);
+        this.phaseT -= dt;
+        if (this.phaseT <= 0 || this.suppressT > 1.0 || this.mag <= 0 || this.flinch > 0.15) { this.cphase = 'hide'; this.phaseT = rr(0.9, 2.2) + (this.suppressT > 0 ? 1.4 : 0); }
+      }
+      this.faceTo(threatFeet, dt, 7);
+      // lost them for a while: push up to a closer cover, then go looking
+      if (!this.targetVisible && this.lostT > 5 && this.cphase !== 'move') { if (this.lostT > 11) { this.releaseCover(); this.state = 'search'; this.invPos = this.lastSeen.clone(); this.invT = 12; this.waitT = 0.5; this.say('Where did they go?', { cd: 6 }); return; } if (R() < dt * 0.5) { this.releaseCover(); this.pushing = true; this.coverSearchT = 0; } }
+    } else {
+      // no usable cover: strafe, keep distance, or hunt the last known position
+      this.faceTo(this.targetVisible ? tgt.feet : this.lastSeen, dt, 7);
+      if (this.targetVisible) {
+        if (d > 18) { this.goTo(tgt.feet); this.follow(dt, 2.2); moving = true; }
+        else if (d < 3.5) { const away = V3(this.pos.x - tgt.feet.x, 0, this.pos.z - tgt.feet.z).normalize(); const np = this.pos.clone().addScaledVector(away, 2); if (walkable(np.x, np.z)) { this.pos.addScaledVector(away, 1.6 * dt); moving = true; } }
+        else { this.strafeT -= dt; if (this.strafeT <= 0) { this.strafeT = rr(1.2, 2.8); const side = V3(Math.cos(this.yaw), 0, -Math.sin(this.yaw)).multiplyScalar(R() < 0.5 ? 1 : -1); this.strafeDir.copy(R() < 0.6 ? side : V3()); }
+          if (this.strafeDir.lengthSq() > 0) { const np = this.pos.clone().addScaledVector(this.strafeDir, 0.5); if (walkable(np.x, np.z)) { this.pos.addScaledVector(this.strafeDir, 1.5 * dt); moving = true; } else this.strafeDir.set(0, 0, 0); } }
+        this.anim.speed = damp(this.anim.speed, moving ? 1.6 : 0, 6, dt);
+        this.wantCrouch = this.reloadT > 0 && this.nearCover(tgt);
+        if (this.mag <= 0 && this.reloadT <= 0) { this.reloadT = 2.6; this.say('Reloading!', { cd: 6 }); }
+      } else if (this.lostT > 1.2) {
+        this.wantCrouch = false; this.goTo(this.lastSeen); const done = this.follow(dt, 2.6); moving = true;
+        if (done && this.lostT > 4) { this.state = 'search'; this.invPos = this.lastSeen.clone(); this.invT = 12; this.waitT = 0.5; this.say('Where did they go?', { cd: 6 }); return; }
+      }
+    }
     this.reactT -= dt; this.burstCd -= dt;
-    if (this.targetVisible && this.reactT <= 0 && this.reloadT <= 0 && !this.wantCrouch && this.burstCd <= 0 && this.flinch <= 0) {
+    const exposed = !this.cov ? !this.wantCrouch : this.cphase === 'peek' || (this.cphase === 'move' && this.moveFire);
+    if (this.targetVisible && exposed && this.reactT <= 0 && this.reloadT <= 0 && this.burstCd <= 0 && this.flinch <= 0) {
       if (this.mag <= 0) { this.reloadT = 2.6; this.say('Reloading!', { cd: 6 }); return; }
       if (this.burst <= 0) this.burst = this.pistol ? 2 : Math.floor(rr(3, 6));
       this.burst--; this.mag--; this.burstCd = this.burst > 0 ? (this.pistol ? 0.35 : 0.11) : rr(0.5, 1.3);
-      const aimRamp = clamp(this.seenT / 1.6, 0.35, 1); let ch = D().acc * clamp(1.5 - d / 18, 0.3, 1.3) * aimRamp * (this.suppressT > 0 ? 0.5 : 1);
+      const aimRamp = clamp(this.seenT / 1.6, 0.35, 1); let ch = D().acc * clamp(1.5 - d / 18, 0.3, 1.3) * aimRamp * (this.suppressT > 0 ? 0.5 : 1) * (this.cphase === 'move' && this.cov ? 0.45 : 1);
       if (tgt.kind === 'player') { if (P.moving) ch *= P.sprinting ? 0.55 : 0.75; if (P.crouchT > 0.5) ch *= 0.8; } else ch *= 0.8;
       this.shootAt(tp, ch, () => { const dmg = rr(...D().dmg) * (this.leader ? 1.2 : 1); if (tgt.kind === 'player') damagePlayer(dmg, this.eye); else tgt.ref.damage(dmg, 'torso', tgt.ref.pos.clone().sub(this.pos).normalize(), tgt.ref.chestPos, this); }, this.pistol ? 'pistol' : 'ak');
     }
@@ -396,8 +430,9 @@ export function updateRagdolls(dt) {
   for (const r of ragdolls) { r.t += dt; for (const p of r.parts) { if (p.body.sleepState === CANNON.Body.SLEEPING && r.t > 1) continue; _wq.set(p.body.quaternion.x, p.body.quaternion.y, p.body.quaternion.z, p.body.quaternion.w); p.holder.quaternion.copy(_wq); p.holder.position.set(p.body.position.x, p.body.position.y, p.body.position.z).sub(_ws.copy(p.off).applyQuaternion(_wq)); } }
 }
 export function clearAgents() {
-  for (const a of G.agents) { G.scene.remove(a.root); G.world.removeBody(a.kb); }
-  for (const r of ragdolls) for (const p of r.parts) { G.scene.remove(p.holder); G.world.removeBody(p.body); }
+  const freeGeo = o => o.traverse(c => { if (c.geometry) c.geometry.dispose(); }); // each character has its own baked geometry
+  for (const a of G.agents) { G.scene.remove(a.root); G.world.removeBody(a.kb); freeGeo(a.root); }
+  for (const r of ragdolls) for (const p of r.parts) { G.scene.remove(p.holder); G.world.removeBody(p.body); freeGeo(p.holder); }
   for (const c of G.world.constraints.slice()) G.world.removeConstraint(c);
   ragdolls.length = 0; G.agents.length = 0; G.enemies.length = 0; G.hostages.length = 0; G.team.length = 0; G.hitboxes.length = 0;
   for (let i = G.props.length - 1; i >= 0; i--) if (G.props[i].kind === 'gun') { G.scene.remove(G.props[i].mesh); G.world.removeBody(G.props[i].body); G.props.splice(i, 1); }

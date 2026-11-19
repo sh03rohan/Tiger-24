@@ -66,7 +66,7 @@ export function build() {
   return {
     id: 'whiteout', bounds: { x0: -42, z0: -42, x1: 42, z1: 42 },
     spawns: { ridge: { pos: V3(-30, 0, 26), yaw: -PI * 0.75, label: 'South ridge', desc: 'Pahar theke neme main gate er dike. LZ kache, kintu khola mathe.', risk: 'Risk: High' },
-      tunnel: { pos: V3(30, 0, -30), yaw: PI * 0.25, label: 'Service tunnel', desc: 'Purbo diker tunnel diye ber hoye fence er kata jayga diye. Command hut kache, chupchap.', risk: 'Risk: Medium · Stealth', surprise: ['Compound'] } },
+      tunnel: { insert: 'fade', pos: V3(30, 0, -30), yaw: PI * 0.25, label: 'Service tunnel', desc: 'Purbo diker tunnel diye ber hoye fence er kata jayga diye. Command hut kache, chupchap.', risk: 'Risk: Medium · Stealth', surprise: ['Compound'] } },
     enemies: [
       { id: 'E1', pos: V3(-1, 0, 12), yaw: 0, room: 'Mountain' }, { id: 'E2', pos: V3(1.6, 0, 12.4), yaw: 0.3, room: 'Mountain' },
       { id: 'E3', pos: V3(-10, 0, 0), yaw: 0, room: 'Compound', patrol: [V3(-15, 0, 7), V3(-15, 0, -7), V3(-5, 0, -8.6), V3(-5, 0, 7)] }, { id: 'E4', pos: V3(8, 0, 8.2), yaw: PI, room: 'Compound', patrol: [V3(6, 0, 8.4), V3(16, 0, 8.2), V3(17, 0, -6), V3(6.4, 0, -6)] },

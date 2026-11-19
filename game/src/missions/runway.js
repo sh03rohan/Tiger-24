@@ -97,9 +97,9 @@ export function build() {
   return {
     id: 'runway', bounds: { x0: -15, z0: -19, x1: 10, z1: 17 },
     spawns: {
-      bridge: { pos: V3(-12.4, 0, -14.5), yaw: -PI / 2, label: 'Jet bridge', desc: 'Terminal theke jet bridge diye front door. Galley te pouchhan, cockpit kache.', risk: 'Risk: High · Direct' },
-      stairs: { pos: V3(3.4, 0, 14.5), yaw: PI / 2, label: 'Rear stairs', desc: 'Catering truck er siri diye pichoner door. Rear galley theke shamne agaben.', risk: 'Risk: Medium' },
-      wing: { pos: V3(5, 0, 0), yaw: PI / 2, label: 'Overwing exit', desc: 'Andhokar e wing e uthe emergency exit khule majhkhane dhukben. Shobcheye surprise.', risk: 'Risk: High · Surprise', surprise: ['Economy'] } },
+      bridge: { insert: 'fade', pos: V3(-12.4, 0, -14.5), yaw: -PI / 2, label: 'Jet bridge', desc: 'Terminal theke jet bridge diye front door. Galley te pouchhan, cockpit kache.', risk: 'Risk: High · Direct' },
+      stairs: { insert: 'fade', pos: V3(3.4, 0, 14.5), yaw: PI / 2, label: 'Rear stairs', desc: 'Catering truck er siri diye pichoner door. Rear galley theke shamne agaben.', risk: 'Risk: Medium' },
+      wing: { insert: 'fade', pos: V3(5, 0, 0), yaw: PI / 2, label: 'Overwing exit', desc: 'Andhokar e wing e uthe emergency exit khule majhkhane dhukben. Shobcheye surprise.', risk: 'Risk: High · Surprise', surprise: ['Economy'] } },
     enemies: [
       { id: 'E1', pos: V3(0.4, 0, -13.4), yaw: 0, room: 'Business' }, { id: 'E2', pos: V3(0, 0, -10.1), yaw: PI, room: 'Business', patrol: [V3(0, 0, -12.6), V3(0, 0, -6.4)] },
       { id: 'E3', pos: V3(0, 0, -4), yaw: PI, room: 'Economy', heavy: true }, { id: 'E4', pos: V3(-1.2, 0, 0.6), yaw: -PI / 2, room: 'Economy' },

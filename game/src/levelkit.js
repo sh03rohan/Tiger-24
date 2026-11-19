@@ -1,5 +1,5 @@
 // Tiger 24 — level kit: shared geometry helpers, colliders, ray tests, doors, glass, props, navigation, environment
-import { THREE, CANNON, G, PI, TAU, M, B, RB, C, SP, PL, RX, add, canvasTex, rng, clamp, R, rr, A, FX, emitNoise, V3, setSkyEnv, RIM, renderer } from './core.js';
+import { THREE, CANNON, G, PI, TAU, M, B, RB, C, SP, PL, RX, add, canvasTex, rng, clamp, R, rr, A, FX, emitNoise, V3, setSkyEnv, RIM, renderer, setAssetGen, purgeAssets, disposeMat } from './core.js';
 
 export const colliders = [];       // {min,max,mat,pen,low,on,mesh,body,door,glass,dyn,id}
 export const doors = [];
@@ -299,12 +299,51 @@ function gridLine(a, b, opt) { let [x0, z0] = a; const [x1, z1] = b; const dx = 
   for (let n = 0; n < 400; n++) { if (!passable(z0 * NAV.nx + x0, opt)) return false; if (x0 === x1 && z0 === z1) return true; const e2 = 2 * err; if (e2 > -dz) { err -= dz; x0 += sx; } if (e2 < dx) { err += dx; z0 += sz; } if (e2 > -dz && e2 < dx && (!passable(z0 * NAV.nx + (x0 - sx), opt) && !passable((z0 - sz) * NAV.nx + x0, opt))) return false; } return true; }
 
 /* ================= mission data (current level) ================= */
+/* ================= cover points (for human-like firefights) =================
+   Low cover (crates, desks, rails < 1.45 m): crouch behind, stand up to shoot over.
+   Tall cover (walls, pillars): stand behind the corner, step out sideways to shoot. */
+export const COVER = [];
+export function buildCover() {
+  COVER.length = 0; const seen = new Set();
+  const push = (x, z, nx, nz, low, c, pk) => { if (!walkable(x, z)) return; if (pk && !walkable(pk.x, pk.z)) return; const k = Math.round(x * 2) + ',' + Math.round(z * 2); if (seen.has(k)) return; seen.add(k); COVER.push({ p: V3(x, 0, z), n: V3(nx, 0, nz), low, c, pk: pk || null, claim: null }); };
+  for (const c of colliders) {
+    if (!c.nav || c.dyn || c.glass || c.door || !c.on) continue; if (c.min.y > 0.4 || c.max.y < 0.7) continue;
+    const low = c.max.y < 1.45, off = 0.5;
+    const sides = [[c.min.x - off, null, -1, 0], [c.max.x + off, null, 1, 0], [null, c.min.z - off, 0, -1], [null, c.max.z + off, 0, 1]];
+    for (const [fx, fz, nx, nz] of sides) {
+      const a0 = fx !== null ? c.min.z : c.min.x, a1 = fx !== null ? c.max.z : c.max.x; const at = (t) => fx !== null ? [fx, t] : [t, fz];
+      if (low) { if (a1 - a0 < 0.5) continue; for (let t = a0 + 0.3; t <= a1 - 0.3 + 1e-6; t += 0.9) { const [x, z] = at(t); push(x, z, nx, nz, true, c); } }
+      else { if (a1 - a0 < 0.6) continue; for (const [t, sg] of [[a0 + 0.3, -1], [a1 - 0.3, 1]]) { const [x, z] = at(t); const [px, pz] = at(t + sg * 0.95); push(x, z, nx, nz, false, c, V3(px, 0, pz)); } }
+    }
+    if (COVER.length > 2500) break;
+  }
+}
+const _co = new THREE.Vector3(), _cd = new THREE.Vector3();
+export function coverProtects(cp, T) { const h = cp.low ? 0.95 : 1.45; _co.set(cp.p.x, h, cp.p.z); _cd.set(T.x - _co.x, T.y - h, T.z - _co.z); const L = _cd.length(); if (L < 0.5) return false; _cd.multiplyScalar(1 / L); const hit = rayWorld(_co, _cd, Math.min(L, 2.0), c => !!c.glass || !!c.door); return !!hit && hit.t < 1.8; }
+export function coverPeek(cp, T) { const q = cp.low ? cp.p : cp.pk; if (!q) return false; return los(V3(q.x, 1.55, q.z), T); }
+export function findCover(ag, T, Tf, opt = {}) {
+  let best = null, bs = 1e9; const me = ag.pos; const dT0 = me.distanceTo(Tf); const now = G.time;
+  for (const c of COVER) {
+    if (c.claim && c.claim !== ag && c.claim.alive && c.claim.cov === c) continue; if (c.bad && c.bad.ag === ag && now < c.bad.until) continue;
+    const dMe = c.p.distanceTo(me); if (dMe > (opt.range || 13)) continue;
+    const dT = c.p.distanceTo(Tf); if (dT < 4 || dT > 30) continue; if (opt.advance && dT > dT0 - 2.5) continue;
+    const tx = Tf.x - c.p.x, tz = Tf.z - c.p.z; if (c.n.x * tx + c.n.z * tz > -0.15 * Math.hypot(tx, tz)) continue; // the cover must sit between us and the threat
+    let s = dMe + Math.abs(dT - 11) * 0.35 + (c.low ? 0 : 0.5) + R() * 1.2;
+    if (opt.flank) { const ax = me.x - Tf.x, az = me.z - Tf.z, bx = c.p.x - Tf.x, bz = c.p.z - Tf.z; const ang = Math.acos(clamp((ax * bx + az * bz) / ((Math.hypot(ax, az) * Math.hypot(bx, bz)) || 1), -1, 1)); s -= ang * 4; }
+    for (const e of G.enemies) if (e !== ag && e.alive && e.cov && e.cov.p.distanceTo(c.p) < 2.4) s += 3;
+    if (s >= bs) continue;
+    if (!coverProtects(c, T) || !coverPeek(c, T)) continue;
+    best = c; bs = s;
+  }
+  return best;
+}
 export const LV = {};
 export const lights = { cams: [], bars: [], alarmBulbs: [] };
 let ENV = {};
 
 export function unloadLevel() {
-  if (LG) { G.scene.remove(LG); LG.traverse(o => { if (o.geometry && !o.geometry.userData.shared) { /* geometries may be cached; keep */ } }); }
+  if (LG) { G.scene.remove(LG); const mats = new Set(); LG.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => mats.add(m)); }); for (const m of mats) if (!m.userData || m.userData.gen !== 0) disposeMat(m); } // free GPU memory (shared geometry re-uploads itself if used again)
+  purgeAssets(G.levelGen || 0); setAssetGen(0); renderer.renderLists && renderer.renderLists.dispose();
   for (const b of levelBodies) G.world.removeBody(b); levelBodies.length = 0;
   for (const c of colliders) if (c.body && c.on) G.world.removeBody(c.body);
   for (const p of G.props) { G.world.removeBody(p.body); p.mesh.parent && p.mesh.parent.remove(p.mesh); } G.props.length = 0;
@@ -314,7 +353,7 @@ export function unloadLevel() {
   if (G.pmrem) setSkyEnv(null); LG = null; renderer.toneMappingExposure = 1.05; RIM.k.value = 0; RIM.soft.value = 0;
 }
 export function beginLevel(env = {}) {
-  unloadLevel(); makeMaterials(); ENV = env;
+  unloadLevel(); G.levelGen = (G.levelGen || 0) + 1; setAssetGen(G.levelGen); makeMaterials(); ENV = env;
   LG = new THREE.Group(); LG.name = 'level'; G.scene.add(LG);
   const gb = new CANNON.Body({ mass: 0, shape: new CANNON.Plane() }); gb.quaternion.setFromEuler(-PI / 2, 0, 0); G.world.addBody(gb); levelBodies.push(gb);
   G.scene.background = new THREE.Color(env.bg || '#05070a'); G.scene.fog = new THREE.FogExp2(env.fog || '#06080b', env.fogD ?? 0.014);

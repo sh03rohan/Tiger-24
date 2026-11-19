@@ -53,7 +53,7 @@ export function build() {
   const cz = i => (carZ(i)[0] + carZ(i)[1]) / 2;
   return {
     id: 'ironrail', bounds: { x0: -3, z0: -44, x1: 3, z1: 37 },
-    spawns: { rear: { pos: V3(0, 0, -40.6), yaw: PI, label: 'Rear coach', desc: 'Pichoner coach er door diye dhukben, ek coach por por samne egoben.', risk: 'Risk: Medium' },
+    spawns: { rear: { insert: 'fade', pos: V3(0, 0, -40.6), yaw: PI, label: 'Rear coach', desc: 'Pichoner coach er door diye dhukben, ek coach por por samne egoben.', risk: 'Risk: Medium' },
       roof: { pos: V3(0, 0, cz(3) - 4.5), yaw: PI, rappel: 2.2, label: 'Roof hatch', desc: 'Heli theke train er chhade neme cargo car er hatch diye dhukben. Engine kache, kintu duidik theke attack.', risk: 'Risk: High · Surprise', surprise: ['Cargo car'] } },
     enemies: [
       { id: 'E1', pos: V3(0, 0, -34), yaw: PI, room: 'Rear coach' }, { id: 'E2', pos: V3(0, 0, -24), yaw: 0, room: 'Coach B', patrol: [V3(0, 0, -27.8), V3(0, 0, -18)] }, { id: 'E3', pos: V3(0, 0, -20), yaw: PI, room: 'Coach B' },

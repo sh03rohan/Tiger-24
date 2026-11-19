@@ -64,8 +64,8 @@ export function build() {
   const tt = { t: 0 };
   return {
     id: 'talon', bounds: { x0: -46, z0: -46, x1: 46, z1: 50 },
-    spawns: { lz: { pos: V3(0, 0, 34.5), yaw: 0, label: 'Landing zone', desc: 'Heli theke LZ te namben, shoja rasta diye base er main gate.', risk: 'Risk: High · Direct' },
-      west: { pos: V3(-33, 0, -12.5), yaw: -PI / 2, label: 'West fence', desc: 'Jungle er bhetor diye pashchimer bhanga fence. Lab er kache, chupchap.', risk: 'Risk: Low · Stealth' } },
+    spawns: { lz: { insert: 'heli', pos: V3(0, 0, 34.5), yaw: 0, label: 'Landing zone', desc: 'Heli theke LZ te namben, shoja rasta diye base er main gate.', risk: 'Risk: High · Direct' },
+      west: { insert: 'fade', pos: V3(-33, 0, -12.5), yaw: -PI / 2, label: 'West fence', desc: 'Jungle er bhetor diye pashchimer bhanga fence. Lab er kache, chupchap.', risk: 'Risk: Low · Stealth' } },
     enemies: [
       { id: 'E1', pos: V3(-3.4, 0, 10.6), yaw: 0, room: 'Base' }, { id: 'E2', pos: V3(3.4, 0, 10.6), yaw: 0, room: 'Base' },
       { id: 'E3', pos: V3(-10, 0, 20), yaw: PI / 2, room: 'Jungle', patrol: [V3(-12, 0, 20), V3(12, 0, 22), V3(12, 0, 14), V3(-12, 0, 14)] },

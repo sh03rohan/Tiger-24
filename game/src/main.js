@@ -8,6 +8,7 @@ import { startMission, updateMission, installHooks, MS, cutWire, closeDefuse, fm
 import { initHUD, updateHUD, defuseUpdate, buildMapImage } from './hud.js';
 import { MISSIONS } from './missions/index.js';
 import { LOBBY, buildLobby, setLobbyCam, showLobby, updateLobby, missionArt, SQUAD_INFO, tagPositions } from './lobby.js';
+import { startInsertion, updateInsertion, insertionActive, clearInsertion } from './insert.js';
 import { NET, COLORS, connect, available, relayUrl, hostGame, joinGame, leaveGame, openGames, players, hostPeer, setReady, updateSetup, setProfile, onMissionStart, onMissionLeave, netTick, puppetUpdate, installNetHooks } from './net.js';
 
 const ARTS = {}; let selMission = null, plan = { entry: null, diff: store.get('diff', 'veteran') }, focusOp = null, menuIdx = 0, loTab = 'primary';
@@ -24,6 +25,7 @@ function boot() {
   MISSIONS.forEach(m => ARTS[m.meta.id] = missionArt(m.meta.art));
   G.hooks.cut = cutWire; G.hooks.defuseUpdate = defuseUpdate;
   G.hooks.defuse = on => { $('defuse').hidden = !on; if (on) defuseUpdate(); };
+  G.hooks.missionMeta = () => CUR && CUR.meta;
   G.hooks.pause = pause; G.hooks.debrief = debrief; G.hooks.levelReady = () => { buildMapImage(); const op = document.querySelector('#hud .op'); if (op && CUR) op.textContent = CUR.meta.name.toUpperCase(); };
   G.hooks.mpStart = g => mpClientStart(g); G.hooks.mpHostGone = () => backToLobby(); G.hooks.mpWipe = () => failMission('Puro team down', 'Shob operator KIA.');
   G.hooks.mpRefresh = () => { if (G.state === 'lobby' && LOBBY.screen === 'multi') renderMulti(); };
@@ -187,10 +189,12 @@ function deploy() {
   tryLandscape(); A.init(); A.startAmbience(); A.setVol(); applyLoadout(PROFILE.loadout);
   G.state = 'playing'; show('hud'); startMission(selMission, plan.entry, plan.diff, NET.on ? [] : PROFILE.squad); G.sway = LV.sway || 0; G.shakeAmb = LV.shake || 0;
   if (NET.on) { MS.netClient = NET.client; onMissionStart(); }
+  else if (!G.noRender && !G.skipIntro) { document.body.classList.add('cine-on'); startInsertion(G.entry, () => document.body.classList.remove('cine-on')); }
   if (!G.mobile) requestLock();
   setTimeout(() => G.hooks.toast && G.hooks.toast(G.mobile ? 'Bam dike joystick, dane drag kore aim' : 'Screen e click korle mouse lock hobe · Esc = pause'), 500);
 }
 function backToLobby() {
+  clearInsertion(); document.body.classList.remove('cine-on');
   if (NET.on && NET.inMission) onMissionLeave();
   G.state = 'lobby'; G.hooks.toastClear && G.hooks.toastClear(); VO.stop(); A.alarm(false); releaseLock(); clearAgents(); unloadLevel(); G.sway = 0; G.shakeAmb = 0; G.defusing = false; $('defuse').hidden = true;
   showLobby(true); show('lobbyUI'); goLobby(NET.on ? 'multi' : LOBBY.screen === 'main' ? 'campaign' : LOBBY.screen); renderProfile();
@@ -200,7 +204,7 @@ function backToLobby() {
 function pause() { if (G.state !== 'playing') return; G.state = 'paused'; releaseLock(); VO.stop(); show('pause'); renderSettings($('settings')); $('pzTitle').textContent = CUR ? CUR.meta.name : '';
   $('restartBtn').hidden = $('planBtn').hidden = NET.on; $('lobbyBtn').textContent = NET.on ? (NET.host ? 'Mission bondho (shobai lobby te)' : 'Mission chere dao') : 'Lobby'; }
 function resume() { if (G.state !== 'paused') return; G.state = 'playing'; show('hud'); if (!G.mobile) requestLock(); }
-function restart() { G.state = 'playing'; show('hud'); startMission(selMission, G.entry, G.diff, PROFILE.squad); G.sway = LV.sway || 0; G.shakeAmb = LV.shake || 0; if (!G.mobile) requestLock(); }
+function restart() { G.state = 'playing'; show('hud'); clearInsertion(); startMission(selMission, G.entry, G.diff, PROFILE.squad); G.sway = LV.sway || 0; G.shakeAmb = LV.shake || 0; if (!G.noRender && !G.skipIntro) { document.body.classList.add('cine-on'); startInsertion(G.entry, () => document.body.classList.remove('cine-on')); } if (!G.mobile) requestLock(); }
 function setupPause() {
   $('resumeBtn').addEventListener('click', resume); $('restartBtn').addEventListener('click', restart);
   $('planBtn').addEventListener('click', () => { A.alarm(false); clearAgents(); openPlanning(selMission); });
@@ -290,6 +294,11 @@ function renderMulti() {
 
 /* ================= loop ================= */
 function tick(dt) {
+  if (insertionActive()) { // cinematic: the world moves, nobody fights, the clock is stopped
+    if (G.vmPass) G.vmPass.enabled = false; G.time += dt; setAnimTime(G.time); G.dt = dt; G.world.step(1 / 60, dt, 3); updateInsertion(dt); updateLevel(dt, G.time, false); FX.update(dt); A.listener(G.camera); return;
+  }
+  if (G.vmPass && !G.vmPass.enabled) G.vmPass.enabled = true;
+  updateInsertion(dt);
   G.time += dt; setAnimTime(G.time); G.dt = dt;
   G.world.step(1 / 60, dt, 3); if (G.state === 'playing') updatePlayer(dt);
   const puppets = NET.client && NET.inMission;
