@@ -210,7 +210,8 @@ let percT = 0;
 function clientUpdate(dt) {
   if (MS.ended) { MS.endT += dt; return; }
   const allDefused = bombs().length > 0 && bombs().every(b => b.defused);
-  if ((MS.timerKind === 'bomb' && !allDefused) || MS.timerKind === 'deadline' || MS.timerKind === 'survive') MS.timer = Math.max(0, MS.timer - dt);
+  const timerLive = !(LV.timer && LV.timer.startStage && (MS.stage || 1) < LV.timer.startStage);
+  if (timerLive && ((MS.timerKind === 'bomb' && !allDefused) || MS.timerKind === 'deadline' || MS.timerKind === 'survive')) MS.timer = Math.max(0, MS.timer - dt);
   if (G.defusing && MS.curBomb && P.pos.distanceTo(MS.curBomb.pos) > 2.3) closeDefuse();
   for (const b of bombs()) { if (b.disp) b.disp.material.color.set(b.defused ? '#30ff60' : ((G.time % 1) < 0.5 ? '#ff3020' : '#550a05')); if (!b.defused && P.pos.distanceTo(b.pos) < 6) { b.beepT = (b.beepT || 0) - dt; if (b.beepT <= 0) { b.beepT = MS.timer < 60 ? 0.35 : 1; A.beep(); } } }
   const fighting = G.enemies.some(e => e.alive && e.state === 'combat'); A.setTension(fighting ? 1 : MS.alarm ? 0.6 : 0.15);
@@ -226,8 +227,9 @@ export function updateMission(dt) {
   if (MS.ended) { MS.endT += dt; return; }
   // timer
   const allDefused = bombs().length > 0 && bombs().every(b => b.defused);
-  if (MS.timerKind === 'bomb' && !allDefused) { MS.timer -= dt; if (MS.timer <= 0) { MS.timer = 0; explode(); return; } if (MS.timer < 60 && !MS.warn60) { MS.warn60 = true; radio('RAFI', 'One minute on the bomb!', 'Rafi: Bomb e ar ek minute!', { prio: true }); } }
-  if (MS.timerKind === 'deadline') { MS.timer -= dt; if (MS.timer <= 0) { MS.timer = 0; fail('Shomoy shesh', LV.deadlineFail || 'Time ran out.'); return; } }
+  const timerLive = !(LV.timer && LV.timer.startStage && (MS.stage || 1) < LV.timer.startStage);
+  if (MS.timerKind === 'bomb' && !allDefused && timerLive) { MS.timer -= dt; if (MS.timer <= 0) { MS.timer = 0; explode(); return; } if (MS.timer < 60 && !MS.warn60) { MS.warn60 = true; radio('RAFI', 'One minute on the bomb!', 'Rafi: Bomb e ar ek minute!', { prio: true }); } }
+  if (MS.timerKind === 'deadline' && timerLive) { MS.timer -= dt; if (MS.timer <= 0) { MS.timer = 0; fail('Shomoy shesh', LV.deadlineFail || 'Time ran out.'); return; } }
   if (MS.timerKind === 'survive') { MS.timer = Math.max(0, MS.timer - dt); }
   // charges
   for (let i = MS.charges.length - 1; i >= 0; i--) { const c = MS.charges[i]; c.t -= dt; if (Math.floor(c.t * 4) !== Math.floor((c.t + dt) * 4)) A.beep(c.t < 1); if (c.t <= 0) { LG && LG.remove(c.mesh); MS.charges.splice(i, 1); G.hooks.breachBlast(c.door, c.from); } }
@@ -249,7 +251,7 @@ export function updateMission(dt) {
     if (MS.camExpo[i] >= camT) { triggerAlarm('CCTV camera spotted you'); G.enemies.filter(e => e.isHostile() && e.state !== 'combat' && e.pos.distanceTo(P.pos) < 30).sort((a, b) => a.pos.distanceTo(P.pos) - b.pos.distanceTo(P.pos)).slice(0, 3).forEach(e => e.investigate(P.pos.clone().add(V3(rr(-2, 2), 0, rr(-2, 2))), true)); MS.camExpo[i] = 0; }
   });
   // executions
-  if (MS.alarm && LV.executions) {
+  if (MS.alarm && LV.executions && (!LV.execRadius || P.pos.distanceTo(LV.execCenter) < LV.execRadius)) {
     MS.alarmT += dt;
     if (!MS.execWarned && MS.alarmT > MS.nextExec - 10 && G.hostages.some(h => h.alive && h.state === 'restrained')) { MS.execWarned = true; radio('RAFI', 'They are preparing to execute hostages! Ten seconds!', 'Rafi: Ora hostage marte jacche! Dosh second!', { prio: true }); G.hooks.execWarn && G.hooks.execWarn(10); }
     if (MS.alarmT >= MS.nextExec) {
@@ -284,7 +286,8 @@ export function updateMission(dt) {
   if (has('survive')) { const o = LV.objectives.find(o => o.type === 'survive'); MS.surviveT += dt; if (MS.timerKind !== 'survive') MS.timer = Math.max(0, (o.s || MS.tlim) - MS.surviveT); }
   G.missionTimer = MS.timer;
   // objectives
-  const st = objectiveState(); if (st.req.every(o => o.done) && (P.alive || remoteUp())) success();
+  const st = objectiveState();
+  if (MS.stage !== MS.lastStage) { const first = MS.lastStage === undefined; MS.lastStage = MS.stage; if (!first && MS.stage !== Infinity) { const line = (LV.stageLines || {})[MS.stage]; G.hooks.banner && G.hooks.banner('NEW OBJECTIVE', st.req.filter(o => o.visible && !o.done).map(o => o.t).join(' · ')); A.beep(true); if (line) radio('RAFI', line[0], line[1], { prio: true }); } } if (st.req.every(o => o.done) && (P.alive || remoteUp())) success();
 }
 const inBox = (p, z) => p.x > z.x1 && p.x < z.x2 && p.z > z.z1 && p.z < z.z2;
 function inZone(z) { return !!z && ((P.alive && inBox(P.pos, z)) || G.team.some(t => t.remote && t.state !== 'downed' && inBox(t.pos, z))); }
@@ -306,13 +309,16 @@ export function objectiveState() {
     else if (o.type === 'stealth') it = { t: o.label || 'Dhora porben na (alarm = fail)', v: MS.alarm ? '✗' : '', done: true, keep: true };
     else if (o.type === 'arrest') { const e = G.enemies.find(x => x.id === o.target); it = { t: o.label || 'Target ke jibito arrest koro', v: e && e.state === 'arrested' ? '✓' : '', done: !!(e && e.state === 'arrested'), sub: e && e.state === 'surrender' ? 'F hold kore arrest koro' : (o.sub || null) }; }
     else if (o.type === 'extract') { const pre = list.filter(x => !x.keep).every(x => x.done); const inz = inZone(o.zone); it = { t: o.label || 'Extraction point e jao', v: pre ? (inz ? '✓' : 'GO') : '', done: pre && inz, sub: pre && !inz ? 'Map e sobuj zone' : null }; }
-    if (it) list.push(it);
+    if (it) { it.stage = o.stage || 1; it.at = o.at || null; it.where = o.where || ''; list.push(it); }
   }
+  // IGI-style stages: only the current stage (and finished ones) are shown; the next opens when the current is done
+  let cur = Infinity; for (const it of list) if (!it.keep && !it.done) cur = Math.min(cur, it.stage); for (const it of list) it.visible = it.stage <= cur; MS.stage = cur; G.stage = cur;
   const bonus = [];
   for (const b of LV.bonus || []) { if (b === 'leader') bonus.push({ t: 'Bonus: leader ke jibito arrest', v: s.leaderArrested ? '✓' : '', done: !!s.leaderArrested, opt: true }); if (b === 'stealth') bonus.push({ t: 'Bonus: alarm na bajiye', v: s.alarm ? '✗' : '', done: false, failed: !!s.alarm, opt: true }); }
   return { req: list, bonus };
 }
-export function objectives() { const st = objectiveState(); return [...st.req, ...st.bonus]; }
+export function objectives() { const st = objectiveState(); return [...st.req.filter(o => o.visible), ...st.bonus]; }
+export function currentTargets() { return objectiveState().req.filter(o => o.visible && !o.done && o.at); }
 function score(successful) {
   const s = G.stats; const acc = s.shots ? s.hits / s.shots : 0; const hasH = G.hostages.some(h => !h.pilot);
   const rows = [];

@@ -43,7 +43,7 @@ Touch controls appear on phones and tablets.
 
 | # | Operation | Type |
 |---|---|---|
-| 01 | Vault | Bank hostage rescue and bomb defusal |
+| 01 | Vault | Open district (300 m map): jammer, getaway trucks, CCTV annex, bank rescue + bomb, helipad extraction |
 | 02 | Deep Blue | Hijacked cargo ship |
 | 03 | Talon | Jungle base raid and helicopter extraction |
 | 04 | Skyline | Skyscraper with three bombs |

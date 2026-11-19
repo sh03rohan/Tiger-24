@@ -530,6 +530,13 @@ td.pos{color:var(--ok)}td.neg{color:var(--hostile)}
 @keyframes cineIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
 body.cine-on #hud,body.cine-on #touch{visibility:hidden}
 @media (orientation:landscape) and (max-height:520px){ #cine .lb{height:9vh} #cine .cc{bottom:calc(9vh + 12px)} #cineName{font-size:28px} #cineLoc{font-size:12px} #cine .skip{bottom:calc(9vh - 26px);font-size:10px} }
+
+/* objective waypoints */
+#wp{position:absolute;inset:0;pointer-events:none}
+.wpm{position:absolute;transform:translate(-50%,-50%);display:grid;justify-items:center;gap:3px;filter:drop-shadow(0 1px 3px #000)}
+.wpm i{width:12px;height:12px;border:2px solid var(--tiger);background:rgba(242,155,43,.35);transform:rotate(45deg)}
+.wpm span{font:600 10.5px/1 var(--f-mono);letter-spacing:.08em;color:#ffe2b8;white-space:nowrap;text-transform:uppercase;background:rgba(0,0,0,.45);padding:2px 5px;border-radius:3px}
+.wpm.edge{opacity:.85}
 </style>
 
 <div class="game">
@@ -623,6 +630,7 @@ body.cine-on #hud,body.cine-on #touch{visibility:hidden}
     <div id="cross"><i></i><i></i><i></i><i></i><b></b></div>
     <div id="hitm"></div><div id="detect"></div><div id="dmgDir"></div>
     <div id="prompt" hidden><span id="promptRing"></span><span id="promptTxt"></span></div>
+    <div id="wp"></div>
     <div id="subs"></div><div id="toasts"></div>
     <div id="scope" hidden></div><div id="suppV"></div><div id="hurtV"></div><div id="flashW"></div>
     <div id="banner"><div id="bannerT"></div><div id="bannerS"></div></div>

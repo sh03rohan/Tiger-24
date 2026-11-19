@@ -181,7 +181,10 @@ export class Enemy extends Agent {
     this.surprised = Math.max(0, this.surprised - dt);
     if (this.cov && this.state !== 'combat') this.releaseCover();
     const st = this.state;
-    if (st !== 'surrender' && st !== 'arrested' && st !== 'stunned') { this.hear(); if (st !== 'shield') this.perceive(dt); }
+    // level of detail: calm guards far from every player think less often and skip animation (fog hides them anyway)
+    let dP = Math.hypot(this.pos.x - P.pos.x, this.pos.z - P.pos.z); for (const t of G.team) if (t.remote) dP = Math.min(dP, Math.hypot(this.pos.x - t.pos.x, this.pos.z - t.pos.z)); this.farLod = dP > 90;
+    const calm = st === 'idle' || st === 'patrol'; let think = true; if (calm && dP > 70) { this.lodT = (this.lodT || 0) - dt; if (this.lodT > 0) think = false; else this.lodT = 0.5; }
+    if (think && st !== 'surrender' && st !== 'arrested' && st !== 'stunned') { this.hear(); if (st !== 'shield') this.perceive(dt); }
     let speed = 0;
     switch (this.state) {
       case 'idle': { this.anim.aim = this.alerted ? 0.6 : 0; this.lookT += dt; this.yaw += angDiff(this.yaw, this.lookBase + Math.sin(this.lookT * 0.4) * 0.8) * Math.min(1, dt * 1.5);
@@ -206,7 +209,7 @@ export class Enemy extends Agent {
     // leader grabs a hostage when the fight starts
     if (this.leader && (this.state === 'combat' || this.state === 'search') && !this.grabbedOnce) { const h = nearestRestrained(this.pos, 7); if (h) { this.state = 'grab'; this.grabH = h; this.grabbedOnce = true; this.say('Nobody moves!', { force: true }); } }
     this.anim.crouch = this.wantCrouch ? 1 : 0;
-    this.physicsStep(dt); animate(this.m, this.anim, dt);
+    this.physicsStep(dt); if (!this.farLod) animate(this.m, this.anim, dt);
   }
   releaseCover() { if (this.cov && this.cov.claim === this) this.cov.claim = null; this.cov = null; this.cphase = null; }
   combat(dt) {

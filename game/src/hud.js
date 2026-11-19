@@ -2,7 +2,7 @@
 import { THREE, G, PI, $, clamp, esc, A } from './core.js';
 import { P, WEAPONS } from './player.js';
 import { colliders, doors, rooms, LV, lights, interactables, roomAt } from './levelkit.js';
-import { MS, objectives, fmt, WIRE_COLORS, bombs } from './mission.js';
+import { MS, objectives, currentTargets, fmt, WIRE_COLORS, bombs } from './mission.js';
 
 let mapImg = null; const MAP = { x0: -24, z0: -38, x1: 24, z1: 31, s: 9 };
 export function buildMapImage() {
@@ -55,7 +55,7 @@ export function updateHUD(dt) {
   el.gFlash.textContent = P.flash; el.gMed.textContent = P.med; el.stance.textContent = P.crouchT > 0.5 ? 'CROUCH' : P.sprinting ? 'SPRINT' : 'STAND';
   // timer
   const bl = bombs(), safe = MS.timerKind === 'bomb' && bl.length && bl.every(x => x.defused); el.timer.hidden = MS.timerKind === 'none';
-  el.timer.textContent = safe ? 'DEFUSED' : fmt(MS.timer); el.timer.classList.toggle('low', !safe && MS.timer < 120 && MS.timerKind !== 'survive'); el.timerLbl.textContent = safe ? 'Bomb safe' : ({ bomb: 'Bomb timer', deadline: 'Deadline', survive: 'Rescue heli asche', none: '' })[MS.timerKind] || '';
+  el.timer.textContent = safe ? 'DEFUSED' : fmt(MS.timer); el.timer.classList.toggle('low', !safe && MS.timer < 120 && MS.timerKind !== 'survive'); el.timerLbl.textContent = safe ? 'Bomb safe' : (LV.timer && LV.timer.startStage && (MS.stage || 1) < LV.timer.startStage) ? `Stage ${LV.timer.startStage} e shuru` : ({ bomb: 'Bomb timer', deadline: 'Deadline', survive: 'Rescue heli asche', none: '' })[MS.timerKind] || '';
   el.alarmTag.hidden = !MS.alarm;
   if (!el.execW.hidden) { const left = +el.execW.dataset.until - G.time; if (left <= 0) el.execW.hidden = true; else el.execW.querySelector('b').textContent = Math.ceil(left) + 's'; }
   // crosshair spread
@@ -81,7 +81,20 @@ export function updateHUD(dt) {
   if (!el.defuse.hidden) el.defTimer.textContent = fmt(MS.timer);
   // team
   miniT -= dt;
-  if (miniT <= 0) { miniT = 1 / 15; drawMini(); drawObjectives(); drawTeam(); if (!el.bigmap.hidden) drawBig(); }
+  if (miniT <= 0) { miniT = 1 / 15; drawMini(); drawObjectives(); drawTeam(); if (!el.bigmap.hidden) drawBig(); TGT = currentTargets(); }
+  drawWaypoints();
+}
+// on-screen markers for the current objectives (direction and distance), clamped to the screen edge when off-screen
+let TGT = []; const _wv = new THREE.Vector3();
+function drawWaypoints() {
+  const box = el.wp || (el.wp = document.getElementById('wp')); if (!box) return;
+  while (box.children.length < 3) { const d = document.createElement('div'); d.className = 'wpm'; d.innerHTML = '<i></i><span></span>'; box.append(d); }
+  const W = box.clientWidth || innerWidth, H = box.clientHeight || innerHeight, cam = G.camera;
+  [...box.children].forEach((d, i) => { const o = TGT[i]; if (!o || G.defusing) { d.hidden = true; return; } d.hidden = false;
+    _wv.set(o.at.x, (o.at.y || 0) + 1.6, o.at.z).project(cam); let x = _wv.x, y = _wv.y; const behind = _wv.z > 1; if (behind) { x = -x; y = -y; }
+    const off = behind || Math.abs(x) > 0.92 || Math.abs(y) > 0.86; if (off) { const k = 1 / Math.max(Math.abs(x) / 0.92, Math.abs(y) / 0.86); x *= k; y *= k; if (behind) y = -0.86; }
+    d.style.left = ((x * 0.5 + 0.5) * W) + 'px'; d.style.top = ((-y * 0.5 + 0.5) * H) + 'px'; d.classList.toggle('edge', off);
+    const dist = Math.round(Math.hypot(o.at.x - P.pos.x, o.at.z - P.pos.z)); d.lastChild.textContent = `${o.where || o.t} · ${dist}m`; });
 }
 function drawObjectives() {
   el.objList.innerHTML = objectives().map(o => `<li class="${o.done ? 'done' : ''} ${o.opt ? 'opt' : ''} ${o.failed ? 'failed' : ''}"><span>${esc(o.t)}</span><b>${esc(o.v)}</b>${o.sub ? `<small>${esc(o.sub)}</small>` : ''}</li>`).join('');
@@ -100,6 +113,7 @@ function dotsOn(g, tr, size, big) {
     tr(h.pos, (x, y) => { g.fillStyle = h.state === 'freed' ? '#7dff9a' : '#ffd34d'; g.beginPath(); g.arc(x, y, size, 0, PI * 2); g.fill(); }); }
   for (const e of G.enemies) { if (!e.alive) continue; if (!known(e)) continue; tr(e.pos, (x, y) => { g.fillStyle = e.state === 'surrender' || e.state === 'arrested' ? '#8a8a8a' : e.state === 'stunned' ? '#ffffff' : '#ff5340'; g.beginPath(); g.arc(x, y, size * 1.1, 0, PI * 2); g.fill(); if (e.marked) { g.strokeStyle = '#fff'; g.lineWidth = 1.5; g.stroke(); } }); }
   for (const t of G.team) tr(t.pos, (x, y) => { g.fillStyle = t.state === 'downed' ? '#ff9a9a' : '#4fd1c5'; g.beginPath(); g.arc(x, y, size, 0, PI * 2); g.fill(); });
+  for (const o of TGT) tr(o.at, (x, y) => { g.fillStyle = '#f29b2b'; g.strokeStyle = '#000'; g.lineWidth = 2; g.font = `900 ${size * (big ? 4 : 3.2)}px sans-serif`; g.textAlign = 'center'; g.strokeText('◆', x, y + size); g.fillText('◆', x, y + size); if (big) { g.font = `700 ${size * 2.2}px sans-serif`; g.strokeText((o.where || o.t).toUpperCase(), x, y - size * 2); g.fillText((o.where || o.t).toUpperCase(), x, y - size * 2); } });
 }
 function drawMini() {
   const c = el.mini, g = c.getContext('2d'), W = c.width, H = c.height; g.clearRect(0, 0, W, H);

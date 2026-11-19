@@ -101,9 +101,28 @@ function slab(o, d, mn, mx, maxT) {
   return { t0: Math.max(0, t0), t1, ax };
 }
 // returns nearest collider hit {t, t1, c, n, p} or null. opts.ignore(c) to skip.
+/* broadphase: on big levels colliders are bucketed in a 6 m grid so rays and circles only test what is nearby */
+const BP = { cs: 6, x0: 0, z0: 0, nx: 0, nz: 0, cells: null, stamp: null, sid: 0, n: 0 };
+function buildBroadphase() {
+  BP.cells = null; BP.n = colliders.length; if (colliders.length < 350) return;
+  let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity; for (const c of colliders) { x0 = Math.min(x0, c.min.x); z0 = Math.min(z0, c.min.z); x1 = Math.max(x1, c.max.x); z1 = Math.max(z1, c.max.z); }
+  BP.x0 = x0; BP.z0 = z0; BP.nx = Math.ceil((x1 - x0) / BP.cs) + 1; BP.nz = Math.ceil((z1 - z0) / BP.cs) + 1; BP.cells = new Array(BP.nx * BP.nz); for (let i = 0; i < BP.cells.length; i++) BP.cells[i] = [];
+  colliders.forEach((c, i) => { c.bi = i; const ax = Math.floor((c.min.x - x0) / BP.cs), bx = Math.floor((c.max.x - x0) / BP.cs), az = Math.floor((c.min.z - z0) / BP.cs), bz = Math.floor((c.max.z - z0) / BP.cs);
+    for (let ix = ax; ix <= bx; ix++) for (let iz = az; iz <= bz; iz++) BP.cells[iz * BP.nx + ix].push(c); });
+  BP.stamp = new Uint32Array(colliders.length); BP.sid = 0;
+}
+// colliders whose cell overlaps the box (each returned once)
+function nearby(minx, minz, maxx, maxz) {
+  if (BP.n !== colliders.length) buildBroadphase(); if (!BP.cells) return colliders;
+  const out = []; if (++BP.sid > 4e9) { BP.stamp.fill(0); BP.sid = 1; } const sid = BP.sid;
+  const ax = Math.max(0, Math.floor((minx - BP.x0) / BP.cs)), bx = Math.min(BP.nx - 1, Math.floor((maxx - BP.x0) / BP.cs)), az = Math.max(0, Math.floor((minz - BP.z0) / BP.cs)), bz = Math.min(BP.nz - 1, Math.floor((maxz - BP.z0) / BP.cs));
+  for (let ix = ax; ix <= bx; ix++) for (let iz = az; iz <= bz; iz++) for (const c of BP.cells[iz * BP.nx + ix]) { if (BP.stamp[c.bi] === sid) continue; BP.stamp[c.bi] = sid; out.push(c); }
+  return out;
+}
+const rayCands = (o, d, L) => { const ex = o.x + d.x * L, ez = o.z + d.z * L; return nearby(Math.min(o.x, ex), Math.min(o.z, ez), Math.max(o.x, ex), Math.max(o.z, ez)); };
 export function rayWorld(o, d, maxD, ignore = null) {
   let best = null, bt = maxD, bax = 0, bt1 = 0;
-  for (const c of colliders) { if (!c.on) continue; if (ignore && ignore(c)) continue; const s = slab(o, d, c.min, c.max, bt); if (s && s.t0 < bt) { bt = s.t0; best = c; bax = s.ax; bt1 = s.t1; } }
+  for (const c of rayCands(o, d, maxD)) { if (!c.on) continue; if (ignore && ignore(c)) continue; const s = slab(o, d, c.min, c.max, bt); if (s && s.t0 < bt) { bt = s.t0; best = c; bax = s.ax; bt1 = s.t1; } }
   if (!best) return null;
   const n = new THREE.Vector3(); if (bax === 0) n.x = -Math.sign(d.x); else if (bax === 1) n.y = -Math.sign(d.y); else n.z = -Math.sign(d.z); if (bax < 0) n.copy(d).negate();
   return { t: bt, t1: bt1, c: best, n, p: o.clone().addScaledVector(d, bt) };
@@ -114,12 +133,13 @@ function smokeBlocks(a, d, L) { for (const s of smokes) { if (s.t <= 0) continue
 export function los(a, b, seeThroughGlass = true) {
   _ld.subVectors(b, a); const L = _ld.length(); if (L < 1e-4) return true; _ld.divideScalar(L);
   if (smokes.length && smokeBlocks(a, _ld, L)) return false;
-  for (const c of colliders) { if (!c.on) continue; if (seeThroughGlass && c.glass) continue; if (c.door && c.door.glassDoor && seeThroughGlass) continue; const s = slab(a, _ld, c.min, c.max, L - 0.05); if (s && s.t0 < L - 0.05 && s.t1 > 0.02) return false; }
+  for (const c of rayCands(a, _ld, L)) { if (!c.on) continue; if (seeThroughGlass && c.glass) continue; if (c.door && c.door.glassDoor && seeThroughGlass) continue; const s = slab(a, _ld, c.min, c.max, L - 0.05); if (s && s.t0 < L - 0.05 && s.t1 > 0.02) return false; }
   return true;
 }
 export function collideCircle(p, r, y0, y1, skipDyn = false) {
   let hit = false;
-  for (let pass = 0; pass < 2; pass++) for (const c of colliders) {
+  const cand = nearby(p.x - r - 0.5, p.z - r - 0.5, p.x + r + 0.5, p.z + r + 0.5);
+  for (let pass = 0; pass < 2; pass++) for (const c of cand) {
     if (!c.on || c.max.y <= y0 || c.min.y >= y1) continue; if (skipDyn && c.glass) continue;
     if (p.x < c.min.x - r || p.x > c.max.x + r || p.z < c.min.z - r || p.z > c.max.z + r) continue;
     const cx = clamp(p.x, c.min.x, c.max.x), cz = clamp(p.z, c.min.z, c.max.z); let dx = p.x - cx, dz = p.z - cz; const d2 = dx * dx + dz * dz;
@@ -270,23 +290,31 @@ const cellOf = (x, z) => [Math.floor((x - NAV.x0) / NAV.cs), Math.floor((z - NAV
 const centerOf = (ix, iz) => V3(NAV.x0 + (ix + 0.5) * NAV.cs, 0, NAV.z0 + (iz + 0.5) * NAV.cs);
 function nearestFree(ix, iz, opt) { for (let rad = 0; rad < 6; rad++) for (let dx = -rad; dx <= rad; dx++) for (let dz = -rad; dz <= rad; dz++) { const x = ix + dx, z = iz + dz; if (x < 0 || z < 0 || x >= NAV.nx || z >= NAV.nz) continue; if (passable(z * NAV.nx + x, opt)) return [x, z]; } return null; }
 export function walkable(x, z, opt = {}) { const [ix, iz] = cellOf(x, z); if (ix < 0 || iz < 0 || ix >= NAV.nx || iz >= NAV.nz) return false; return passable(iz * NAV.nx + ix, opt); }
+const PF = { g: null, came: null, seen: null, closed: null, sid: 0 };
 export function findPath(from, to, opt = {}) {
   const { nx, nz } = NAV; let [sx, sz] = cellOf(from.x, from.z), [tx, tz] = cellOf(to.x, to.z);
   const s = nearestFree(sx, sz, opt), t = nearestFree(tx, tz, opt); if (!s || !t) return null; [sx, sz] = s; [tx, tz] = t;
-  const N = nx * nz, gS = new Float32Array(N).fill(Infinity), came = new Int32Array(N).fill(-1), closed = new Uint8Array(N);
-  const start = sz * nx + sx, goal = tz * nx + tx; gS[start] = 0;
-  const heap = [[0, start]]; const push = (f, k) => { heap.push([f, k]); let i = heap.length - 1; while (i > 0) { const p = (i - 1) >> 1; if (heap[p][0] <= heap[i][0]) break; [heap[p], heap[i]] = [heap[i], heap[p]]; i = p; } };
-  const pop = () => { const top = heap[0], last = heap.pop(); if (heap.length) { heap[0] = last; let i = 0; for (;;) { const l = i * 2 + 1, r = l + 1; let m = i; if (l < heap.length && heap[l][0] < heap[m][0]) m = l; if (r < heap.length && heap[r][0] < heap[m][0]) m = r; if (m === i) break; [heap[m], heap[i]] = [heap[i], heap[m]]; i = m; } } return top; };
-  const h = (ix, iz) => { const dx = Math.abs(ix - tx), dz = Math.abs(iz - tz); return (dx + dz) + (1.4142 - 2) * Math.min(dx, dz); };
+  const N = nx * nz; if (!PF.g || PF.g.length !== N) { PF.g = new Float32Array(N); PF.came = new Int32Array(N); PF.seen = new Uint32Array(N); PF.closed = new Uint32Array(N); PF.sid = 0; }
+  const sid = ++PF.sid, gS = PF.g, came = PF.came, seen = PF.seen, closed = PF.closed; const G0 = k => seen[k] === sid ? gS[k] : Infinity;
+  const start = sz * nx + sx, goal = tz * nx + tx; gS[start] = 0; seen[start] = sid; came[start] = -1;
+  // typed binary heap (big open maps expand tens of thousands of cells)
+  if (!PF.hf || PF.hf.length < 65536) { PF.hf = new Float64Array(65536); PF.hk = new Int32Array(65536); }
+  let hf = PF.hf, hk = PF.hk, hn = 0;
+  const push = (f, k) => { if (hn >= hf.length) { const nf = new Float64Array(hf.length * 2), nk2 = new Int32Array(hf.length * 2); nf.set(hf); nk2.set(hk); PF.hf = hf = nf; PF.hk = hk = nk2; }
+    let i = hn++; while (i > 0) { const pa = (i - 1) >> 1; if (hf[pa] <= f) break; hf[i] = hf[pa]; hk[i] = hk[pa]; i = pa; } hf[i] = f; hk[i] = k; };
+  const pop = () => { const top = hk[0]; hn--; if (hn > 0) { const f = hf[hn], k = hk[hn]; let i = 0; for (;;) { const l = i * 2 + 1, r = l + 1; let m = -1, mf = f; if (l < hn && hf[l] < mf) { m = l; mf = hf[l]; } if (r < hn && hf[r] < mf) m = r; if (m < 0) break; hf[i] = hf[m]; hk[i] = hk[m]; i = m; } hf[i] = f; hk[i] = k; } return top; };
+  push(0, start);
+  const h = (ix, iz) => { const dx = Math.abs(ix - tx), dz = Math.abs(iz - tz); return W * ((dx + dz) + (1.4142 - 2) * Math.min(dx, dz)); }; const W = N > 200000 ? 1.6 : 1; // weighted A* on huge maps: near-optimal, far fewer expansions
   let iter = 0; const dirs = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, 1.4142], [1, -1, 1.4142], [-1, 1, 1.4142], [-1, -1, 1.4142]];
-  while (heap.length && iter++ < 25000) {
-    const [, k] = pop(); if (closed[k]) continue; closed[k] = 1; if (k === goal) break;
+  const budget = Math.max(25000, Math.min(160000, N / 3));
+  while (hn > 0 && iter++ < budget) {
+    const k = pop(); if (closed[k] === sid) continue; closed[k] = sid; if (k === goal) break;
     const ix = k % nx, iz = (k / nx) | 0;
-    for (const [dx, dz, cost] of dirs) { const x = ix + dx, z = iz + dz; if (x < 0 || z < 0 || x >= nx || z >= nz) continue; const nk = z * nx + x; if (closed[nk] || !passable(nk, opt)) continue;
+    for (const [dx, dz, cost] of dirs) { const x = ix + dx, z = iz + dz; if (x < 0 || z < 0 || x >= nx || z >= nz) continue; const nk = z * nx + x; if (closed[nk] === sid || !passable(nk, opt)) continue;
       if (dx && dz && (!passable(iz * nx + x, opt) || !passable(z * nx + ix, opt))) continue;
-      const ng = gS[k] + cost; if (ng < gS[nk]) { gS[nk] = ng; came[nk] = k; push(ng + h(x, z), nk); } }
+      const ng = gS[k] + cost; if (ng < G0(nk)) { gS[nk] = ng; seen[nk] = sid; came[nk] = k; push(ng + h(x, z), nk); } }
   }
-  if (came[goal] < 0 && goal !== start) return null;
+  if ((seen[goal] !== sid || came[goal] < 0) && goal !== start) return null;
   const cells = []; for (let k = goal; k !== -1; k = came[k]) { cells.push(k); if (k === start) break; } cells.reverse();
   // string pulling on the grid
   const pts = []; let i = 0; const ck = k => [k % nx, (k / nx) | 0];
@@ -349,7 +377,7 @@ export function unloadLevel() {
   for (const p of G.props) { G.world.removeBody(p.body); p.mesh.parent && p.mesh.parent.remove(p.mesh); } G.props.length = 0;
   colliders.length = 0; doors.length = 0; glassPanes.length = 0; rooms.length = 0; interactables.length = 0; anchors.length = 0; lightPool.length = 0;
   lights.cams = []; lights.bars = []; lights.alarmBulbs = []; lights.rain = null; lights.police = null; lights.alarm = null; lights.moon = null; lights.skyMat = null;
-  for (const k of Object.keys(LV)) delete LV[k]; smokes.length = 0; lights.dust = null; lights.shafts = [];
+  for (const k of Object.keys(LV)) delete LV[k]; smokes.length = 0; BP.n = -1; BP.cells = null; lights.dust = null; lights.shafts = [];
   if (G.pmrem) setSkyEnv(null); LG = null; renderer.toneMappingExposure = 1.05; RIM.k.value = 0; RIM.soft.value = 0;
 }
 export function beginLevel(env = {}) {
@@ -361,7 +389,7 @@ export function beginLevel(env = {}) {
   const hI = env.hemi ?? 0.42; LG.add(new THREE.HemisphereLight(env.hemiSky || '#3a4660', env.hemiGround || '#120e0a', hI < 1.5 ? hI * 2.2 : hI)); // three's physically based hemi light is divided by PI, so lift the legacy values
   const moon = new THREE.DirectionalLight(env.sunColor || '#9fb8ff', env.sun ?? 1.4); const sp = env.sunPos || [5, 12, 26]; moon.position.set(...sp); const st = env.sunTarget || [0, 0, -2]; moon.target.position.set(...st); LG.add(moon, moon.target);
   moon.castShadow = true; const ss = env.shadowSize || 16; moon.shadow.mapSize.set(2048, 2048); Object.assign(moon.shadow.camera, { left: -ss, right: ss, top: ss, bottom: -ss, near: 1, far: env.shadowFar || 80 }); moon.shadow.bias = -0.0005; moon.shadow.normalBias = 0.04;
-  lights.moon = moon; lights.sunBase = env.sun ?? 1.4;
+  lights.moon = moon; lights.sunBase = env.sun ?? 1.4; lights.sunOff = V3(sp[0] - st[0], sp[1] - st[1], sp[2] - st[2]);
   for (let i = 0; i < 5; i++) { const l = new THREE.PointLight('#ffffff', 0, 10, 1.8); LG.add(l); lightPool.push(l); }
   lights.alarm = new THREE.SpotLight('#ff2a1a', 0, 22, 0.45, 0.6, 1.5); const ap = env.alarmPos || [0, 5.7, 0]; lights.alarm.position.set(...ap); LG.add(lights.alarm, lights.alarm.target);
   for (const [x, y, z] of (env.alarmBulbs || [])) { const b = deco(SP(0.1, 10, 8), new THREE.MeshBasicMaterial({ color: '#401010' }), [x, y, z], null, null, false); lights.alarmBulbs.push(b); }
@@ -470,6 +498,7 @@ export function updateLevel(dt, t, alarm) {
   if (lights.police) { lights.police.color.set(ph ? '#ff2a2a' : '#2a5cff'); lights.police.intensity = 16 * strobe; }
   lights.bars.forEach((b, i) => b.visible = (i % 2 === 0) === !!ph);
   assignLights();
+  if (ENV.followShadow && lights.moon) { const cp = G.camera.position, so = lights.sunOff; lights.moon.target.position.set(cp.x, 0, cp.z); lights.moon.position.set(cp.x + so.x, so.y, cp.z + so.z); lights.moon.target.updateMatrixWorld(); }
   const Du = lights.dust; if (Du) { const cp = G.camera.position, S = 14; for (let i = 0; i < Du.n; i++) { const j = i * 3; const bx = Du.base[j] + Math.sin(t * 0.11 + i) * 0.4 + t * 0.05, by = Du.base[j + 1] + Math.sin(t * 0.07 + i * 1.7) * 0.5 - t * 0.02, bz = Du.base[j + 2] + Math.cos(t * 0.09 + i) * 0.4;
       Du.pos[j] = cp.x - S / 2 + (((bx - cp.x) % S) + S) % S; Du.pos[j + 1] = Math.max(0.05, cp.y - 3 + (((by - cp.y) % 7) + 7) % 7); Du.pos[j + 2] = cp.z - S / 2 + (((bz - cp.z) % S) + S) % S; } Du.pts.geometry.attributes.position.needsUpdate = true; }
   for (const sh of lights.shafts) sh.material.uniforms.t.value = t;
@@ -478,7 +507,7 @@ export function updateLevel(dt, t, alarm) {
   lights.alarm.intensity = alarm && ENV.alarmLight !== false ? 70 : 0; if (alarm) lights.alarm.target.position.set(lights.alarm.position.x + Math.cos(t * 2.4) * 8, 0, lights.alarm.position.z + Math.sin(t * 2.4) * 6);
   const on = alarm && (t % 0.8) < 0.4; for (const b of lights.alarmBulbs) b.material.color.set(on ? '#ff2a1a' : '#401010');
   // rain
-  const Rn = lights.rain; if (Rn) for (let i = 0; i < Rn.n; i++) { const j = i * 6, dy = Rn.vel[i] * dt; Rn.pos[j + 1] -= dy; Rn.pos[j + 4] -= dy; if (Rn.snow) { Rn.pos[j] += Math.sin(t + i) * dt * 0.3; Rn.pos[j + 3] = Rn.pos[j] + 0.02; } if (Rn.pos[j + 4] < 0) { const y = 13 + R() * 3; Rn.pos[j + 1] = y; Rn.pos[j + 4] = y - Rn.sl; } } if (Rn) Rn.mesh.geometry.attributes.position.needsUpdate = true;
+  const Rn = lights.rain; if (Rn) for (let i = 0; i < Rn.n; i++) { const j = i * 6, dy = Rn.vel[i] * dt; Rn.pos[j + 1] -= dy; Rn.pos[j + 4] -= dy; if (Rn.snow) { Rn.pos[j] += Math.sin(t + i) * dt * 0.3; Rn.pos[j + 3] = Rn.pos[j] + 0.02; } if (Rn.pos[j + 4] < 0) { const y = 13 + R() * 3; Rn.pos[j + 1] = y; Rn.pos[j + 4] = y - Rn.sl; if (ENV.rainFollow) { const cp = G.camera.position; const x = cp.x + rr(-24, 24), z = cp.z + rr(-24, 24); Rn.pos[j] = x; Rn.pos[j + 3] = x + 0.02; Rn.pos[j + 2] = Rn.pos[j + 5] = z; } } } if (Rn) Rn.mesh.geometry.attributes.position.needsUpdate = true;
   // lightning
   lights.nextBolt -= dt; if (lights.nextBolt <= 0) { flashT = 0.5; lights.nextBolt = rr(9, 20); A.thunder(); }
   if (flashT > 0) { flashT -= dt; const f = (flashT > 0.38 || (flashT > 0.2 && flashT < 0.28)) ? 1 : 0; lights.moon.intensity = lights.sunBase + f * 5; lights.skyMat && lights.skyMat.color.setScalar(1 + f * 2.5); } else { lights.moon.intensity = lights.sunBase; lights.skyMat && lights.skyMat.color.setScalar(1); }
